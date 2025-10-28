@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=0.2
+Type=Application
+Name=Loopino
+Comment=Synthesizer for Jack Audio Connection Kit
+Exec=loopino
+Icon=loopino
+Categories=AudioVideo;Audio;Midi;
+Terminal=false
+X-NSM-Capable=false
+X-NSM-Exec=loopino
+Name[de_DE]=loopino
