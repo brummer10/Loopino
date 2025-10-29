@@ -184,12 +184,12 @@ public:
         w_top->func.key_press_callback = forward_key_press;
         w_top->func.key_release_callback = forward_key_release;
         w_top->func.resize_notify_callback = resize_callback;
-        os_set_window_min_size(w_top, 335, 85, 440, 190);
+        os_set_window_min_size(w_top, 798, 190, 880, 290);
 
         w = create_widget(app, w_top, 0, 0, 440, 190);
         w->parent_struct = (void*)this;
         w->parent = w_top;
-        w->scale.gravity = NORTHWEST;
+        w->scale.gravity = CENTER;
         w->func.expose_callback = draw_window;
         w->flags |= NO_AUTOREPEAT;
         w->func.key_release_callback = forward_key_release;
@@ -231,7 +231,7 @@ public:
         lw = create_widget(app, w_top, 440, 0, 440, 190);
         lw->parent_struct = (void*)this;
         lw->parent = w_top;
-        lw->scale.gravity = NORTHWEST;
+        lw->scale.gravity = CENTER;
         lw->func.expose_callback = draw_window;
         lw->flags |= NO_AUTOREPEAT;
         lw->func.key_press_callback = forward_key_press;
@@ -313,6 +313,7 @@ public:
 
         Frequency = add_valuedisplay(w, _(" Hz"), 220, 150, 65, 30);
         set_adjustment(Frequency->adj, 440.0, 440.0, 370.0, 453.0, 0.1, CL_CONTINUOS);
+        Frequency->scale.gravity = SOUTHWEST;
         Frequency->flags |= HAS_TOOLTIP;
         add_tooltip(Frequency, "Snyth Root Freqency");
         Frequency->flags |= NO_AUTOREPEAT;
@@ -411,6 +412,7 @@ public:
 
         keyboard = add_midi_keyboard(w_top, "Organ", 0, 190, 880, 100);
         keyboard->flags |= HIDE_ON_DELETE;
+        keyboard->scale.gravity = SOUTHCENTER;
         keyboard->parent_struct = (void*)this;
         MidiKeyboard* keys = (MidiKeyboard*)keyboard->private_struct;
         keys->mk_send_note = get_note;
@@ -1327,8 +1329,8 @@ private:
             double rstate = (double)self->loopPoint_r_auto/ (double)self->af.samplesize;
             int lpoint = (width*lstate);
             int rpoint = (width*rstate);
-            cairo_set_source_rgba(w->crb, 0.25, 0.25, 0.65, 0.666);
-            cairo_rectangle(w->crb, lpoint, 2 , rpoint-lpoint, height-4);
+            cairo_set_source_rgba(w->crb, 0.25, 0.25, 0.65, 0.444);
+            cairo_rectangle(w->crb, lpoint, 2 , max(1,rpoint-lpoint), height-4);
             cairo_fill(w->crb);
         }
 
