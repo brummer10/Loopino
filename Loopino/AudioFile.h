@@ -47,6 +47,25 @@ public:
         delete[] saveBuffer;
     }
 
+    inline bool convertToMono() {
+        delete[] samples;
+        samples = nullptr;
+        try {
+            samples = new float[samplesize];
+        } catch (...) {
+            std::cerr << "Error: could not load file" << std::endl;
+            return false;
+        }
+        std::memset(samples, 0, samplesize * sizeof(float));
+        for (uint32_t i = 0; i < samplesize; i++) {
+            samples[i] = saveBuffer[i * channels] ;
+        }
+        delete[] saveBuffer;
+        saveBuffer = nullptr;
+        channels = 1;
+        return true;
+    }
+
     // load a Audio File into the buffer
     inline bool getAudioFile(const char* file, const uint32_t expectedSampleRate = 0) {
         SF_INFO info;
@@ -55,8 +74,8 @@ public:
         channels = 0;
         samplesize = 0;
         samplerate = 0;
-        delete[] samples;
-        samples = nullptr;
+        delete[] saveBuffer;
+        saveBuffer = nullptr;
         // Open the wave file for reading
         SNDFILE *sndfile = sf_open(file, SFM_READ, &info);
 
@@ -69,17 +88,18 @@ public:
             return false;
         }
         try {
-            samples = new float[info.frames * info.channels];
+            saveBuffer = new float[info.frames * info.channels];
         } catch (...) {
             std::cerr << "Error: could not load file" << std::endl;
             return false;
         }
-        std::memset(samples, 0, info.frames * info.channels * sizeof(float));
-        samplesize = (uint32_t) sf_readf_float(sndfile, &samples[0], info.frames);
+        std::memset(saveBuffer, 0, info.frames * info.channels * sizeof(float));
+        samplesize = (uint32_t) sf_readf_float(sndfile, &saveBuffer[0], info.frames);
         if (!samplesize ) samplesize = info.frames;
         channels = info.channels;
         samplerate = info.samplerate;
         sf_close(sndfile);
+        if (!convertToMono()) return false;
         if (expectedSampleRate)
             samples = checkSampleRate(&samplesize, channels, samples, samplerate, expectedSampleRate);
         return samples ? true : false;

@@ -20,7 +20,7 @@
 #include "ParallelThread.h"
 #include "Loopino_ui.h"
 
-SoundEditUi ui;
+Loopino ui;
 
 #include "jack.cc"
 

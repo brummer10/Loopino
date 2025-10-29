@@ -20,7 +20,6 @@
 #include <fstream>
 #include <limits>
 #include <cstdint>
-#include <filesystem>
 
 #include "SupportedFormats.h"
 #include "AudioFile.h"
@@ -35,14 +34,14 @@
 
 #pragma once
 
-#ifndef AUDIOLOOPERUI_H
-#define AUDIOLOOPERUI_H
+#ifndef LOOPINO_H
+#define LOOPINO_H
 
 /****************************************************************
-    class SoundEditUi - create the GUI for alooper
+    class Loopino - create the GUI for loopino
 ****************************************************************/
 
-class SoundEditUi
+class Loopino
 {
 public:
     Widget_t *w;
@@ -56,7 +55,7 @@ public:
     
     std::vector<float> loopBuffer;
     std::vector<float> sampleBuffer;
-    //std::vector<std::vector<float>> bank;
+
     SampleBank sbank;
     SampleInfo sampleData;
     SampleBank lbank;
@@ -93,7 +92,7 @@ public:
     bool play_loop;
     bool ready;
 
-    SoundEditUi() : af() {
+    Loopino() : af() {
         jack_sr = 0;
         position = 0;
         loopPoint_l = 0;
@@ -120,7 +119,7 @@ public:
         generateKeys();
     };
 
-    ~SoundEditUi() {
+    ~Loopino() {
         pa.stop();
     };
 
@@ -131,6 +130,7 @@ public:
     // stop background threads and quit main window
     void onExit() {
         pa.stop();
+        //savePreset(presetFile);
         #if defined(__linux__) || defined(__FreeBSD__) || \
             defined(__NetBSD__) || defined(__OpenBSD__)
         quit(w_top);
@@ -143,12 +143,13 @@ public:
     void setJackSampleRate(uint32_t sr) {
         jack_sr = sr;        
         synth.init((double)jack_sr, 8);
+        //loadPreset(presetFile);
     }
 
     // receive a file name from the File Browser or the command-line
     static void dialog_response(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if(user_data !=NULL) {
             self->filename = *(char**)user_data;
             self->loadFile();
@@ -418,8 +419,8 @@ public:
         widget_show_all(w_top);
 
         pa.startTimeout(60);
-        pa.set<SoundEditUi, &SoundEditUi::updateUI>(this);
-
+        pa.set<Loopino, &Loopino::updateUI>(this);
+        getConfigFilePath();
     }
 
 private:
@@ -447,13 +448,12 @@ private:
 
     SupportedFormats supportedFormats;
 
-
-    std::mutex WMutex;
-
     bool is_loaded;
     std::string newLabel;
     std::vector<std::string> keys;
 
+    std::string configFile;
+    std::string presetFile;
 
 /****************************************************************
                     Create loop samples
@@ -584,7 +584,7 @@ private:
         uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
         std::string tittle = "loopino: loop size " + std::to_string(length)
                             + " Samples | Key Note " + keys[loopRootkey]
-                            + " loop " + std::to_string(currentLoop)
+                            + " | loop " + std::to_string(currentLoop)
                             + " from " + std::to_string(matches - 1);
         widget_set_title(w_top, tittle.data());
         setLoopBank();
@@ -666,19 +666,14 @@ private:
             std::filesystem::path p = file;
             instrument_name = p.stem();
             adj_set_max_value(wview->adj, (float)af.samplesize);
-            //adj_set_max_value(loopMark_L->adj, (float)af.samplesize*0.5);
             adj_set_state(loopMark_L->adj, 0.0);
             loopPoint_l = 0;
-            //adj_set_max_value(loopMark_R->adj, (float)af.samplesize*0.5);
             adj_set_state(loopMark_R->adj,1.0);
             loopPoint_r = af.samplesize;
             loadLoopNew = true;
             update_waveview(wview, af.samples, af.samplesize);
             setOneShootBank();
             button_setLoop_callback(setLoop, NULL);
-            //os_resize_window(w->app->dpy, loopview, loopview->width , loopview->height +1);
-            //os_resize_window(w->app->dpy, loopview, loopview->width , loopview->height -1);
-           // widget_set_title(w_top, basename(name));
         } else {
             af.samplesize = 0;
             std::cerr << "Error: could not resample file" << std::endl;
@@ -693,7 +688,7 @@ private:
 
     static void dnd_load_response(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (user_data != NULL) {
             char* dndfile = NULL;
             dndfile = strtok(*(char**)user_data, "\r\n");
@@ -740,6 +735,7 @@ private:
     static void dummy_callback(void *w_, void* user_data) {}
 
     // frequently (60ms) update the wave view widget for playhead position
+    // and the MIDI keyboard to visualising the MIDI input 
     // triggered from the timeout background thread 
     void updateUI() {
         static int waitOne = 0;
@@ -777,20 +773,23 @@ private:
                       Button callbacks 
 ****************************************************************/
 
+    // forward all keyboard press to the MIDI keyboard
     static void forward_key_press(void *w_, void *key, void *user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->keyboard->func.key_press_callback(self->keyboard, key, user_data);
     }
 
+    // forward all keyboard release to the MIDI keyboard
     static void forward_key_release(void *w_, void *key, void *user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->keyboard->func.key_release_callback(self->keyboard, key, user_data);
     }
 
+    // send MIDI keyboard input to the synth
     static void get_note(Widget_t *w, const int *key, int on_off) {
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (on_off == 0x90) {
             self->synth.noteOn((int)(*key), 0.8f);              
         } else {
@@ -798,14 +797,16 @@ private:
         }
     }
 
+    // send Panic to the synth
     static void all_notes_off(Widget_t *w, const int *value) {
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->synth.allNoteOff();
     }
 
+    // select if we play OneShoot or Loop
     static void button_set_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (adj_get_value(w->adj)){
             self->synth.setLoop(true);
         } else {
@@ -813,18 +814,18 @@ private:
         }
     }
 
-    // loop size control
+    // loop size control (Periods to use)
     static void setLoopSize_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->loopPeriods = (int)(adj_get_value(w->adj));
         if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
     }
 
-    // setLoop
+    // set next Loop
     static void setNextLoop_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (w->flags & HAS_POINTER && !*(int*)user_data){
             if (self->getNextLoop(self->currentLoop + 1 )) {
                 self->setLoopToBank();
@@ -832,10 +833,10 @@ private:
         }
     }
 
-    // setLoop
+    // set previous Loop
     static void setPrevLoop_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (w->flags & HAS_POINTER && !*(int*)user_data){
             if (self->getNextLoop(self->currentLoop - 1 )) {
                 self->setLoopToBank();
@@ -843,10 +844,10 @@ private:
         }
     }
 
-    // setLoop
+    // set best Loop
     static void button_setLoop_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
             if (!self->createLoop()) {
                 adj_set_value(w->adj, 0.0);
                 return;
@@ -857,57 +858,16 @@ private:
     // quit
     static void button_quit_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (w->flags & HAS_POINTER && !*(int*)user_data){
             self->onExit();
-        }
-    }
-
-    static void fxdialog_response(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        FileButton *filebutton = (FileButton *)w->private_struct;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
-        self->play = false;
-        if(user_data !=NULL) {
-            char *tmp = strdup(*(const char**)user_data);
-            free(filebutton->last_path);
-            filebutton->last_path = NULL;
-            filebutton->last_path = strdup(dirname(tmp));
-            filebutton->path = filebutton->last_path;
-            free(tmp);
-        }
-        w->func.user_callback(w,user_data);
-        filebutton->is_active = false;
-        adj_set_value(w->adj,0.0);
-        if (adj_get_value(self->playbutton->adj))
-             self->play = true;
-
-    }
-
-    static void fxbutton_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        FileButton *filebutton = (FileButton *)w->private_struct;
-        if (w->flags & HAS_POINTER && adj_get_value(w->adj)){
-            filebutton->w = save_file_dialog(w,filebutton->path,filebutton->filter);
-    #ifdef _OS_UNIX_
-            Atom wmStateAbove = XInternAtom(w->app->dpy, "_NET_WM_STATE_ABOVE", 1 );
-            Atom wmNetWmState = XInternAtom(w->app->dpy, "_NET_WM_STATE", 1 );
-            XChangeProperty(w->app->dpy, filebutton->w->widget, wmNetWmState, XA_ATOM, 32, 
-                PropModeReplace, (unsigned char *) &wmStateAbove, 1); 
-    #elif defined _WIN32
-            os_set_transient_for_hint(w, filebutton->w);
-    #endif
-            filebutton->is_active = true;
-        } else if (w->flags & HAS_POINTER && !adj_get_value(w->adj)){
-            if(filebutton->is_active)
-                destroy_widget(filebutton->w,w->app);
         }
     }
 
     // clip
     static void button_clip_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (w->flags & HAS_POINTER && !*(int*)user_data){
             self->clipToLoopMarks();
         }
@@ -916,7 +876,7 @@ private:
     // playbutton
     static void button_playbutton_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         if (adj_get_value(w->adj)){
             self->play = true;
         } else self->play = false;
@@ -925,14 +885,16 @@ private:
     // set left loop point by value change
     static void slider_l_changed_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         float st = adj_get_state(w->adj);
         uint32_t lp = (self->af.samplesize) * st;
         if (lp > self->position) {
             lp = self->position;
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
+        st = std::clamp(st, 0.0f, 0.99f);
         adj_set_state(w->adj, st);
+        if (adj_get_state(self->loopMark_R->adj) < st+0.01)adj_set_state(self->loopMark_R->adj, st+0.01);
         int width = self->w->width-40;
         os_move_window(self->w->app->dpy, w, 15+ (width * st), 2);
         self->loopPoint_l = lp;
@@ -957,7 +919,7 @@ private:
     static void move_loopMark_L(void *w_, void *xmotion_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         XMotionEvent *xmotion = (XMotionEvent*)xmotion_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         Widget_t *p = (Widget_t*)w->parent;
         int x1, y1;
         os_translate_coords(w, w->widget, p->widget, xmotion->x, 0, &x1, &y1);
@@ -969,20 +931,23 @@ private:
             self->position = lp;
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
+        st = std::clamp(st, 0.0f, 0.99f);
         adj_set_state(w->adj, st);
     }
 
     // set right loop point by value changes
     static void slider_r_changed_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         float st = adj_get_state(w->adj);
         uint32_t lp = (self->af.samplesize * st);
         if (lp < self->position) {
-            lp = self->position;
+            self->position = lp;
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
+        st = std::clamp(st, 0.01f, 1.0f);
         adj_set_state(w->adj, st);
+        if (adj_get_state(self->loopMark_L->adj) > st-0.01)adj_set_state(self->loopMark_L->adj, st-0.01);
         int width = self->w->width-40;
         os_move_window(self->w->app->dpy, w, 15 + (width * st), 2);
         self->loopPoint_r = lp;
@@ -1007,7 +972,7 @@ private:
     static void move_loopMark_R(void *w_, void *xmotion_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         XMotionEvent *xmotion = (XMotionEvent*)xmotion_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         Widget_t *p = (Widget_t*)w->parent;
         int x1, y1;
         os_translate_coords(w, w->widget, p->widget, xmotion->x, 0, &x1, &y1);
@@ -1016,16 +981,17 @@ private:
         float st =  (float)( (float)(pos-15.0)/(float)width);
          uint32_t lp = (self->af.samplesize * st);
         if (lp < self->position) {
-            lp = self->position;
+            self->position = lp;
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
+        st = std::clamp(st, 0.01f, 1.0f);
         adj_set_state(w->adj, st);
     }
 
     // set loop mark positions on window resize
     static void resize_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         float st = adj_get_state(self->loopMark_L->adj);
         int width = self->w->width-40;
         os_move_window(w->app->dpy, self->loopMark_L, 15+ (width * st), 2);
@@ -1036,7 +1002,7 @@ private:
     // set playhead position to mouse pointer
     static void set_playhead(void *w_, void* xbutton_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
         if (w->flags & HAS_POINTER) {
             if(xbutton->state & Button1Mask) {
@@ -1056,42 +1022,42 @@ private:
     // Attack control
     static void attack_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->synth.setAttack(adj_get_value(w->adj));
     }
 
     // Decay control
     static void decay_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->synth.setDecay(adj_get_value(w->adj));
     }
 
     // Sustain control
     static void sustain_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->synth.setSustain(adj_get_value(w->adj));
     }
 
     // Release control
     static void release_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->synth.setRelease(adj_get_value(w->adj));
     }
 
     // Frequency control
     static void frequency_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->synth.setRootFreq(adj_get_value(w->adj));
     }
 
     // volume control
     static void volume_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->gain = std::pow(1e+01, 0.05 * adj_get_value(w->adj));
     }
 
@@ -1311,7 +1277,7 @@ private:
         int width_t = metrics.width;
         int height_t = metrics.height;
         if (!metrics.visible) return;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         int width, height;
         static bool clearImage = false;
         static bool clearImageDone = false;
@@ -1378,7 +1344,7 @@ private:
         int width_t = metrics.width;
         int height_t = metrics.height;
         if (!metrics.visible) return;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         int width, height;
         static bool clearImage = false;
         static bool clearImageDone = false;
@@ -1442,7 +1408,7 @@ private:
         int width = metrics.width;
         int height = metrics.height;
         if (!metrics.visible) return;
-        SoundEditUi *self = static_cast<SoundEditUi*>(w->parent_struct);
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         static const float sCent = 0.666;
         static float collectCents = 0;
         collectCents -= sCent;
@@ -1463,16 +1429,155 @@ private:
     }
 
 /****************************************************************
-                      create local widget
+                      Preset handling
 ****************************************************************/
 
-    static void fxbutton_mem_free(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        FileButton *filebutton = (FileButton *)w->private_struct;
-        free(filebutton->last_path);
-        filebutton->last_path = NULL;
-        free(filebutton);
-        filebutton = NULL;
+
+    void getConfigFilePath() {
+         if (getenv("XDG_CONFIG_HOME")) {
+            std::string path = getenv("XDG_CONFIG_HOME");
+            configFile = path + "/loopino/loopino.conf";
+            presetFile = path + "/loopino/loopino.presets";
+        } else {
+        #if defined(__linux__) || defined(__FreeBSD__) || \
+            defined(__NetBSD__) || defined(__OpenBSD__)
+            std::string path = getenv("HOME");
+            configFile = path +"/.config/loopino/loopino.conf";
+            presetFile = path +"/.config/loopino/loopino.presets";
+        #else
+            std::string path = getenv("APPDATA");
+            configFile = path +"\\.config\\loopino\\loopino.conf";
+            presetFile = path +"\\.config\\loopino\\loopino.presets";
+        #endif
+       }
+    }
+
+    struct PresetHeader {
+        char magic[8];
+        uint32_t version;
+        uint64_t dataSize;
+    };
+
+    // Helper functions
+    template <typename T>
+    void writeString(std::ofstream& out, T& v) {
+        out.write(reinterpret_cast<char*>(&v), sizeof(T));
+    }
+
+    template <typename T>
+    void writeValue(std::ofstream& out, const T& v) {
+        out.write(reinterpret_cast<const char*>(&v), sizeof(T));
+    }
+
+    template <typename T>
+    void readValue(std::ifstream& in, T& v) {
+        in.read(reinterpret_cast<char*>(&v), sizeof(T));
+    }
+
+    void writeControllerValue(std::ofstream& out, Widget_t *w) {
+        float v = adj_get_value(w->adj);
+        writeValue(out, v);
+    }
+
+    void readControllerValue(std::ifstream& in, Widget_t *w) {
+        float v = 0.0;
+        readValue(in , v);
+        adj_set_value(w->adj, v);
+    }
+
+    bool writeSampleBuffer(std::ofstream& out, const float* samples, uint32_t numData) {
+        if (!samples || numData == 0) return false;
+
+        if (!out) return false;
+
+        writeValue(out, numData);
+        out.write(reinterpret_cast<const char*>(samples), numData * sizeof(float));
+
+        return true;
+    }
+
+    bool readSampleBuffer(std::ifstream& in, float*& samples, uint32_t& numData) {
+        if (!in) return false;
+
+        readValue(in, numData);
+        if (numData == 0) return false;
+
+        samples = new float[numData];
+        in.read(reinterpret_cast<char*>(samples), numData * sizeof(float));
+
+        return true;
+    }
+
+    // Preset Save 
+    bool savePreset(const std::string& filename) {
+        std::filesystem::path p = std::filesystem::path(filename).parent_path().u8string();
+        if (!std::filesystem::exists(p)) {
+            std::filesystem::create_directory(p);
+        }
+        std::ofstream out(filename, std::ios::binary);
+        if (!out) return false;
+        PresetHeader header;
+        std::memcpy(header.magic, "LOOPINO", 8);
+        header.version = 1; // guard for future proof
+        header.dataSize = af.samplesize;
+        writeString(out, header);
+
+        writeValue(out, currentLoop);
+        writeControllerValue(out, Attack);
+        writeControllerValue(out, Decay);
+        writeControllerValue(out, Sustain);
+        writeControllerValue(out, Release);
+        writeControllerValue(out, Frequency);
+        writeControllerValue(out, setLoop);
+        writeControllerValue(out, setLoopSize);
+
+        writeSampleBuffer(out, af.samples, af.samplesize);
+        return true;
+    }
+
+    // Preset  Load
+    bool loadPreset(const std::string& filename) {
+        std::ifstream in(filename, std::ios::binary);
+        if (!in) return false;
+        PresetHeader header{};
+        readValue(in, header);
+        if (std::strncmp(header.magic, "LOOPINO", 7) != 0) {
+            std::cerr << "Invalid preset file\n";
+            return false;
+        }
+
+        // we need to update the header version when change the preset format
+        // then we could protect new values with a guard by check the header version
+        if (header.version > 1) {
+            std::cerr << "Warning: newer preset version (" << header.version << ")\n";
+        }
+
+        readValue(in, currentLoop);
+        readControllerValue(in, Attack);
+        readControllerValue(in, Decay);
+        readControllerValue(in, Sustain);
+        readControllerValue(in, Release);
+        readControllerValue(in, Frequency);
+        readControllerValue(in, setLoop);
+        readControllerValue(in, setLoopSize);
+
+        readSampleBuffer(in, af.samples, af.samplesize);
+        loadPresetToSynth();
+        return true;
+    }
+
+    void loadPresetToSynth() {
+        af.channels = 1;
+        adj_set_max_value(wview->adj, (float)af.samplesize);
+        adj_set_state(loopMark_L->adj, 0.0);
+        loopPoint_l = 0;
+        adj_set_state(loopMark_R->adj,1.0);
+        loopPoint_r = af.samplesize;
+        loadLoopNew = true;
+        loadNew = true;
+        update_waveview(wview, af.samples, af.samplesize);
+        setOneShootBank();
+        button_setLoop_callback(setLoop, NULL);        
     }
 
 };
