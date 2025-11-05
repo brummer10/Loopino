@@ -60,12 +60,16 @@ endif
 	RESAMP_OBJ := $(patsubst %.cc,%.o,$(RESAMP_SOURCES))
 	RESAMP_LIB := libzita-resampler.$(STATIC_LIB_EXT)
 
+	CLAP_DIR := ./Clap/
+	CLAP_INCLUDE := -I. -I./Clap/clap/ -I./Clap/
+	CLAP_SOURCES := $(CLAP_DIR)ClapPlug.cpp
+
 ifeq ($(TARGET), Linux)
 	# set compile flags
 	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile jack $(USEAPI) fftw3f`\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections -Wl,--gc-sections \
 	-pthread $(SSE_CFLAGS)
-	CXXFLAGS += -MMD -std=c++20 -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
+	CXXFLAGS += -MMD -std=c++20 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
 	LDFLAGS += -I. -lm -pthread -lpthread `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs jack sndfile $(USEAPI) fftw3f`
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
@@ -107,6 +111,11 @@ all : check $(NAME)
 debug : all
 
 
+# clap: $(NAME).clap
+#	$(QUIET)mkdir -p ../bin/
+#	$(QUIET)cp ./$(NAME).clap ../bin/
+#	@$(B_ECHO) "=================== DONE =======================$(reset)"
+
 -include $(DEPS)
 
 check :
@@ -144,6 +153,13 @@ $(RESAMP_LIB): $(RESAMP_OBJ)
 	@$(B_ECHO) "Build static library $@ $(reset)"
 	$(QUIET)$(AR) rcs $(RESAMP_LIB) $(RESAMP_OBJ)
 	@$(B_ECHO) "=================== DONE =======================$(reset)"
+
+$(NAME).clap: Loopino_ui.h  $(RESAMP_LIB)
+	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME).clap
+ifeq (,$(filter yes,$(DEBUG)))
+	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
+endif
 
 $(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h
 	@$(B_ECHO) "Build $@ $(reset)"

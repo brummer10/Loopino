@@ -12,6 +12,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <random>
 
 
 #ifndef SAMPLEPLAYER_H
@@ -29,19 +30,33 @@ public:
     void setParams(float a, float d, float s, float r) {
         attack = std::max(a, 0.001f);
         decay = std::max(d, 0.001f);
-        sustain = std::clamp(s, 0.0f, 1.0f);
+        sustain = std::clamp(s, 0.001f, 1.0f);
         release = std::max(r, 0.001f);
+        attackCoef = recalcCoef(attack);
+        decayCoef = recalcCoef(decay);
+        releaseCoef = recalcCoef(release);
     }
 
     void setSampleRate(double sr) {sampleRate = sr;}
 
-    void setAttack(float a) {attack = std::max(a, 0.001f);}
+    void setAttack(float a) {
+        attack = std::max(a, 0.001f);
+        attackCoef = recalcCoef(attack);
+    }
 
-    void setDecay(float d) {decay = std::max(d, 0.001f);}
+    void setDecay(float d) {
+        decay = std::max(d, 0.001f);
+        decayCoef = recalcCoef(decay);
+    }
 
-    void setSustain(float s) {sustain = std::clamp(s, 0.0f, 1.0f);}
+    void setSustain(float s) {
+        sustain = std::clamp(s, 0.001f, 1.0f);
+    }
 
-    void setRelease(float r) {release = std::max(r, 0.001f);}
+    void setRelease(float r) {
+        release = std::max(r, 0.001f);
+        releaseCoef = recalcCoef(release);
+    }
 
     void noteOn() {state = ATTACK;}
 
@@ -50,15 +65,15 @@ public:
     float process() {
         switch (state) {
         case ATTACK:
-            level += 1.0f / (attack * sampleRate);
-            if (level >= 1.0f) {
+            level += attackCoef * (1.0f - level);
+            if (level >= 0.999f) {
                 level = 1.0f;
                 state = DECAY;
             }
             break;
 
         case DECAY:
-            level -= (1.0f - sustain) / (decay * sampleRate);
+            level += decayCoef * (sustain - level);
             if (level <= sustain) {
                 level = sustain;
                 state = SUSTAIN;
@@ -69,8 +84,8 @@ public:
             break;
 
         case RELEASE:
-            level -= sustain / (release * sampleRate);
-            if (level <= 0.0f) {
+            level += releaseCoef * (0.0f - level);
+            if (level <= 0.0001f) {
                 level = 0.0f;
                 state = IDLE;
             }
@@ -97,6 +112,15 @@ private:
     float release = 0.3f;
 
     float level = 0.0f;
+
+    float attackCoef  = 0.0f;
+    float decayCoef   = 0.0f;
+    float releaseCoef = 0.0f;
+
+    float recalcCoef(float val) {
+        return 1.0f - std::exp(-1.0f / (val * sampleRate));
+    }
+
 };
 
 /****************************************************************

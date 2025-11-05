@@ -73,6 +73,8 @@ int main(int argc, char *argv[]){
 
     main_run(&app);
 
+    ui.pa.stop();
+
     quitJack();
 
     main_quit(&app);

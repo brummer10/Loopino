@@ -1,7 +1,9 @@
 
 include libxputty/Build/Makefile.base
 
-NOGOAL := mod install all features
+NOGOAL := mod install all features clap
+
+SWITCHGOAL := clap
 
 PASS := features 
 
@@ -28,8 +30,15 @@ ifeq (,$(filter $(NOGOAL),$(MAKECMDGOALS)))
 ifeq (,$(wildcard ./libxputty/xputty/resources/dir.png))
 	@cp ./Loopino/Resources/*.png ./libxputty/xputty/resources/
 endif
-	@exec $(MAKE) --no-print-directory -j 1 -C $@ $(filter-out jack,$(MAKECMDGOALS))
+	@exec $(MAKE) --no-print-directory -j 1 -C $@ $(MAKECMDGOALS)
 endif
+ifneq (,$(filter $(SWITCHGOAL),$(MAKECMDGOALS)))
+ifeq (,$(wildcard ./libxputty/xputty/resources/dir.png))
+	@cp ./Loopino/Resources/*.png ./libxputty/xputty/resources/
+endif
+	@exec $(MAKE) --no-print-directory -j 1 -C $@ all
+endif
+
 
 $(SUBDIR): libxputty
 ifeq (,$(filter $(PASS),$(MAKECMDGOALS)))

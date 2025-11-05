@@ -7,6 +7,7 @@
  * Copyright (C) 2025 brummer <brummer@web.de>
  */
 
+#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -27,12 +28,11 @@
 #include "LoopGenerator.h"
 #include "SamplePlayer.h"
 
+#include "TextEntry.h"
 #include "xwidgets.h"
 #include "xfile-dialog.h"
 #include "xmessage-dialog.h"
 
-
-#pragma once
 
 #ifndef LOOPINO_H
 #define LOOPINO_H
@@ -41,7 +41,7 @@
     class Loopino - create the GUI for loopino
 ****************************************************************/
 
-class Loopino
+class Loopino : public TextEntry
 {
 public:
     Widget_t *w;
@@ -116,6 +116,7 @@ public:
         loopFreq = 0.0;
         loopPitchCorrection = 0;
         loopRootkey = 60;
+        loadPresetMIDI = -1;
         generateKeys();
     };
 
@@ -142,7 +143,7 @@ public:
     // receive Sample Rate from audio back-end
     void setJackSampleRate(uint32_t sr) {
         jack_sr = sr;        
-        synth.init((double)jack_sr, 8);
+        synth.init((double)jack_sr, 12);
         //loadPreset(presetFile);
     }
 
@@ -163,6 +164,11 @@ public:
         read_soundfile(filename.c_str());
     }
 
+    void loadPresetNum(int v) {
+        if (v < 0 || v > (int)presetFiles.size()) return;
+        loadPresetMIDI = v;
+    }
+
 /****************************************************************
                       main window
 ****************************************************************/
@@ -177,23 +183,17 @@ public:
             defined(__NetBSD__) || defined(__OpenBSD__)
         widget_set_dnd_aware(w_top);
         #endif
-        w_top->parent_struct = (void*)this;
         os_set_input_mask(w_top);
         w_top->func.dnd_notify_callback = dnd_load_response;
-        w_top->flags |= NO_AUTOREPEAT;
-        w_top->func.key_press_callback = forward_key_press;
-        w_top->func.key_release_callback = forward_key_release;
         w_top->func.resize_notify_callback = resize_callback;
+        commonWidgetSettings(w_top);
         os_set_window_min_size(w_top, 798, 190, 880, 290);
 
         w = create_widget(app, w_top, 0, 0, 440, 190);
-        w->parent_struct = (void*)this;
         w->parent = w_top;
-        w->scale.gravity = CENTER;
+        w->scale.gravity = NORTCENTER;
         w->func.expose_callback = draw_window;
-        w->flags |= NO_AUTOREPEAT;
-        w->func.key_release_callback = forward_key_release;
-        w->func.key_press_callback = forward_key_press;
+        commonWidgetSettings(w);
 
         loopMark_L = add_hslider(w, "",15, 2, 18, 18);
         loopMark_L->scale.gravity = NONE;
@@ -219,74 +219,55 @@ public:
 
         wview = add_waveview(w, "", 20, 20, 400, 120);
         wview->scale.gravity = NORTHWEST;
-        wview->parent_struct = (void*)this;
         wview->adj_x = add_adjustment(wview,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
         wview->adj = wview->adj_x;
         wview->func.expose_callback = draw_wview;
-        wview->flags |= NO_AUTOREPEAT;
         wview->func.button_release_callback = set_playhead;
-        wview->func.key_press_callback = forward_key_press;
-        wview->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(wview);
 
         lw = create_widget(app, w_top, 440, 0, 440, 190);
-        lw->parent_struct = (void*)this;
         lw->parent = w_top;
-        lw->scale.gravity = CENTER;
+        lw->scale.gravity = NORTCENTER;
         lw->func.expose_callback = draw_window;
-        lw->flags |= NO_AUTOREPEAT;
-        lw->func.key_press_callback = forward_key_press;
-        lw->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(lw);
 
         loopview = add_waveview(lw, "", 20, 20, 400, 120);
         loopview->scale.gravity = NORTHWEST;
-        loopview->parent_struct = (void*)this;
         loopview->adj_x = add_adjustment(loopview,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
         loopview->adj = loopview->adj_x;
         loopview->func.expose_callback = draw_lwview;
         loopview->func.button_release_callback = set_playhead;
-        loopview->flags |= NO_AUTOREPEAT;
-        loopview->func.key_press_callback = forward_key_press;
-        loopview->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(loopview);
 
-        filebutton = add_file_button(w, 20, 150, 30, 30, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
+        filebutton = add_file_button(w, 20, 148, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
         filebutton->scale.gravity = SOUTHEAST;
-        filebutton->parent_struct = (void*)this;
         widget_get_png(filebutton, LDVAR(load__png));
         filebutton->flags |= HAS_TOOLTIP;
         add_tooltip(filebutton, "Load audio file");
         filebutton->func.user_callback = dialog_response;
-        filebutton->flags |= NO_AUTOREPEAT;
-        filebutton->func.key_press_callback = forward_key_press;
-        filebutton->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(filebutton);
 
-        Attack = add_knob(w, "Attack",60,150,28,28);
-        Attack->parent_struct = (void*)this;
+        Attack = add_knob(w, "Attack",60,145,38,38);
         Attack->scale.gravity = SOUTHWEST;
         Attack->flags |= HAS_TOOLTIP;
         add_tooltip(Attack, "Attack");
-        set_adjustment(Attack->adj, 0.01, 0.01, 0.001, 1.0, 0.01, CL_LOGARITHMIC);
+        set_adjustment(Attack->adj, 0.01, 0.01, 0.001, 5.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(Attack, (Color_state)1, (Color_mod)2, 0.894, 0.106, 0.623, 1.0);
         Attack->func.expose_callback = draw_knob;
         Attack->func.value_changed_callback = attack_callback;
-        Attack->flags |= NO_AUTOREPEAT;
-        Attack->func.key_press_callback = forward_key_press;
-        Attack->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(Attack);
 
-        Decay = add_knob(w, "Decay",100,150,28,28);
-        Decay->parent_struct = (void*)this;
+        Decay = add_knob(w, "Decay",100,145,38,38);
         Decay->scale.gravity = SOUTHWEST;
         Decay->flags |= HAS_TOOLTIP;
         add_tooltip(Decay, "Decay");
-        set_adjustment(Decay->adj, 0.1, 0.1, 0.001, 1.0, 0.01, CL_LOGARITHMIC);
+        set_adjustment(Decay->adj, 0.1, 0.1, 0.005, 5.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(Decay, (Color_state)1, (Color_mod)2, 0.902, 0.098, 0.117, 1.0);
         Decay->func.expose_callback = draw_knob;
         Decay->func.value_changed_callback = decay_callback;
-        Decay->flags |= NO_AUTOREPEAT;
-        Decay->func.key_press_callback = forward_key_press;
-        Decay->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(Decay);
 
-        Sustain = add_knob(w, "Sustain",140,150,28,28);
-        Sustain->parent_struct = (void*)this;
+        Sustain = add_knob(w, "Sustain",140,145,38,38);
         Sustain->scale.gravity = SOUTHWEST;
         Sustain->flags |= HAS_TOOLTIP;
         add_tooltip(Sustain, "Sustain");
@@ -294,125 +275,100 @@ public:
         set_widget_color(Sustain, (Color_state)1, (Color_mod)2, 0.377, 0.898, 0.109, 1.0);
         Sustain->func.expose_callback = draw_knob;
         Sustain->func.value_changed_callback = sustain_callback;
-        Sustain->flags |= NO_AUTOREPEAT;
-        Sustain->func.key_press_callback = forward_key_press;
-        Sustain->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(Sustain);
 
-        Release = add_knob(w, "Release",180,150,28,28);
-        Release->parent_struct = (void*)this;
+        Release = add_knob(w, "Release",180,145,38,38);
         Release->scale.gravity = SOUTHWEST;
         Release->flags |= HAS_TOOLTIP;
         add_tooltip(Release, "Release");
-        set_adjustment(Release->adj, 0.3, 0.3, 0.001, 5.0, 0.01, CL_LOGARITHMIC);
+        set_adjustment(Release->adj, 0.3, 0.3, 0.005, 10.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(Release, (Color_state)1, (Color_mod)2, 0.486, 0.106, 0.894, 1.0);
         Release->func.expose_callback = draw_knob;
         Release->func.value_changed_callback = release_callback;
-        Release->flags |= NO_AUTOREPEAT;
-        Release->func.key_press_callback = forward_key_press;
-        Release->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(Release);
 
-        Frequency = add_valuedisplay(w, _(" Hz"), 220, 150, 65, 30);
+        Frequency = add_valuedisplay(w, _(" Hz"), 230, 150, 65, 30);
         set_adjustment(Frequency->adj, 440.0, 440.0, 370.0, 453.0, 0.1, CL_CONTINUOS);
         Frequency->scale.gravity = SOUTHWEST;
         Frequency->flags |= HAS_TOOLTIP;
         add_tooltip(Frequency, "Snyth Root Freqency");
-        Frequency->flags |= NO_AUTOREPEAT;
-        Frequency->parent_struct = (void*)this;
         Frequency->func.value_changed_callback = frequency_callback;
-        Frequency->func.key_press_callback = forward_key_press;
-        Frequency->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(Frequency);
 
-        setLoopSize = add_knob(lw, "S",140,150,28,28);
-        setLoopSize->parent_struct = (void*)this;
+        setLoopSize = add_knob(lw, "S",135,145,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
         setLoopSize->flags |= HAS_TOOLTIP;
         add_tooltip(setLoopSize, "Loop Periods");
         set_adjustment(setLoopSize->adj, 1.0, 1.0, 1.0, 12.0, 1.0, CL_CONTINUOS);
         setLoopSize->func.expose_callback = draw_knob;
         setLoopSize->func.value_changed_callback = setLoopSize_callback;
-        setLoopSize->flags |= NO_AUTOREPEAT;
-        setLoopSize->func.key_press_callback = forward_key_press;
-        setLoopSize->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(setLoopSize);
 
-        setPrevLoop = add_button(lw, "<", 180, 150, 30, 30);
+        setPrevLoop = add_button(lw, "<", 180, 148, 35, 35);
         setPrevLoop->scale.gravity = SOUTHWEST;
-        setPrevLoop->parent_struct = (void*)this;
         setPrevLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setPrevLoop, "Load previous loop");
         setPrevLoop->func.value_changed_callback = setPrevLoop_callback;
-        setPrevLoop->flags |= NO_AUTOREPEAT;
-        setPrevLoop->func.key_press_callback = forward_key_press;
-        setPrevLoop->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(setPrevLoop);
 
-        setNextLoop = add_button(lw, ">", 210, 150, 30, 30);
+        setNextLoop = add_button(lw, ">", 215, 148, 35, 35);
         setNextLoop->scale.gravity = SOUTHWEST;
-        setNextLoop->parent_struct = (void*)this;
         setNextLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
-        setNextLoop->flags |= NO_AUTOREPEAT;
-        setNextLoop->func.key_press_callback = forward_key_press;
-        setNextLoop->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(setNextLoop);
 
-        volume = add_knob(lw, "dB",265,150,28,28);
-        volume->parent_struct = (void*)this;
+        Presets = add_button(lw, "Presets", 20, 150, 80, 30);
+        Presets->scale.gravity = SOUTHWEST;
+        Presets->flags |= HAS_TOOLTIP;
+        add_tooltip(Presets, "Load next loop");
+        Presets->func.value_changed_callback = presets_callback;
+        commonWidgetSettings(Presets);
+
+        volume = add_knob(lw, "dB",255,145,38,38);
         volume->scale.gravity = SOUTHWEST;
         volume->flags |= HAS_TOOLTIP;
         add_tooltip(volume, "Volume (dB)");
         set_adjustment(volume->adj, 0.0, 0.0, -20.0, 6.0, 0.1, CL_CONTINUOS);
         volume->func.expose_callback = draw_knob;
         volume->func.value_changed_callback = volume_callback;
-        volume->flags |= NO_AUTOREPEAT;
-        volume->func.key_press_callback = forward_key_press;
-        volume->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(volume);
 
-        setLoop = add_image_toggle_button(lw, "", 300, 150, 30, 30);
+        setLoop = add_image_toggle_button(lw, "", 300, 148, 35, 35);
         setLoop->scale.gravity = SOUTHWEST;
-        setLoop->parent_struct = (void*)this;
         widget_get_png(setLoop, LDVAR(loop_png));
         setLoop->flags |= HAS_TOOLTIP;
-        add_tooltip(setLoop, "Play Loop");
+        add_tooltip(setLoop, "Use Loop Sample");
         setLoop->func.value_changed_callback = button_set_callback;
-        setLoop->flags |= NO_AUTOREPEAT;
-        setLoop->func.key_press_callback = forward_key_press;
-        setLoop->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(setLoop);
 
-        clip = add_button(w, "", 330, 150, 30, 30);
+        clip = add_button(w, "", 325, 148, 35, 35);
         clip->scale.gravity = SOUTHWEST;
-        clip->parent_struct = (void*)this;
         widget_get_png(clip, LDVAR(clip__png));
         clip->flags |= HAS_TOOLTIP;
         add_tooltip(clip, "Clip Sample to clip marks");
         clip->func.value_changed_callback = button_clip_callback;
-        clip->flags |= NO_AUTOREPEAT;
-        clip->func.key_press_callback = forward_key_press;
-        clip->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(clip);
 
-        playbutton = add_image_toggle_button(w, "", 360, 150, 30, 30);
+        playbutton = add_image_toggle_button(w, "", 360, 148, 35, 35);
         playbutton->scale.gravity = SOUTHWEST;
-        playbutton->parent_struct = (void*)this;
         widget_get_png(playbutton, LDVAR(play_png));
         playbutton->flags |= HAS_TOOLTIP;
         add_tooltip(playbutton, "Play Sample");
         playbutton->func.value_changed_callback = button_playbutton_callback;
-        playbutton->flags |= NO_AUTOREPEAT;
-        playbutton->func.key_press_callback = forward_key_press;
-        playbutton->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(playbutton);
 
-        w_quit = add_button(lw, "", 390, 150, 30, 30);
-        w_quit->parent_struct = (void*)this;
+        w_quit = add_button(lw, "", 390, 148, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
         w_quit->scale.gravity = SOUTHWEST;
         w_quit->flags |= HAS_TOOLTIP;
         add_tooltip(w_quit, "Exit");
         w_quit->func.value_changed_callback = button_quit_callback;
-        w_quit->flags |= NO_AUTOREPEAT;
-        w_quit->func.key_press_callback = forward_key_press;
-        w_quit->func.key_release_callback = forward_key_release;
+        commonWidgetSettings(w_quit);
 
         keyboard = add_midi_keyboard(w_top, "Organ", 0, 190, 880, 100);
         keyboard->flags |= HIDE_ON_DELETE;
-        keyboard->scale.gravity = SOUTHCENTER;
+        //keyboard->scale.gravity = SOUTHCENTER;
         keyboard->parent_struct = (void*)this;
         MidiKeyboard* keys = (MidiKeyboard*)keyboard->private_struct;
         keys->mk_send_note = get_note;
@@ -423,6 +379,7 @@ public:
         pa.startTimeout(60);
         pa.set<Loopino, &Loopino::updateUI>(this);
         getConfigFilePath();
+        createPrestList();
     }
 
 private:
@@ -441,6 +398,7 @@ private:
     Widget_t *setLoopSize;
     Widget_t *setNextLoop;
     Widget_t *setPrevLoop;
+    Widget_t *Presets;
 
     Widget_t *Attack;
     Widget_t *Decay;
@@ -453,9 +411,13 @@ private:
     bool is_loaded;
     std::string newLabel;
     std::vector<std::string> keys;
+    std::vector<std::string> presetFiles;
 
     std::string configFile;
     std::string presetFile;
+    std::string presetDir;
+    std::string presetName;
+    int loadPresetMIDI;
 
 /****************************************************************
                     Create loop samples
@@ -745,6 +707,13 @@ private:
             defined(__NetBSD__) || defined(__OpenBSD__)
         XLockDisplay(w->app->dpy);
         #endif
+        if (loadPresetMIDI > -1) {
+            std::string name = presetFiles[loadPresetMIDI];
+            std::string path = getPathFor(name);
+            loadPreset(path);
+            loadPresetMIDI = -1;
+        }
+
         wview->func.adj_callback = dummy_callback;
         playbutton->func.adj_callback = dummy_callback;
         if (ready) adj_set_value(wview->adj, (float) position);
@@ -774,6 +743,13 @@ private:
 /****************************************************************
                       Button callbacks 
 ****************************************************************/
+
+    void commonWidgetSettings(Widget_t *wi) {
+        wi->parent_struct = (void*)this;
+        wi->flags |= NO_AUTOREPEAT;
+        wi->func.key_press_callback = forward_key_press;
+        wi->func.key_release_callback = forward_key_release;
+    }
 
     // forward all keyboard press to the MIDI keyboard
     static void forward_key_press(void *w_, void *key, void *user_data) {
@@ -1434,22 +1410,107 @@ private:
                       Preset handling
 ****************************************************************/
 
+    std::string getPathFor(const std::string& name) const {
+        return presetDir + name + ".presets";
+    }
+
+    void createPrestList() {
+        presetFiles.clear();
+        std::filesystem::path p = std::filesystem::path(presetFile).parent_path().u8string();
+        for (auto &f : std::filesystem::directory_iterator(p)) {
+            if (f.path().extension() == ".presets") {
+                presetFiles.push_back(f.path().stem().string());
+            }
+        }
+    }
+
+    // pop up a text entry to enter a name for a preset to save
+    void saveAs() {
+        Widget_t* dia = showTextEntry(w_top, 
+                    "Loopino - save preset as:", "Save preset as:");
+        int x1, y1;
+        os_translate_coords( w_top, w_top->widget, 
+            os_get_root_window(w_top->app, IS_WIDGET), 0, 0, &x1, &y1);
+        os_move_window(w_top->app->dpy,dia,x1+190, y1+80);
+        w_top->func.dialog_callback = [] (void *w_, void* user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            if(user_data !=NULL && strlen(*(const char**)user_data)) {
+                Loopino *self = static_cast<Loopino*>(w->parent_struct);
+                self->presetName = (*(const char**)user_data);
+                self->savePreset(self->getPathFor(self->presetName));
+            }
+        };
+    }
+
+    // save menu callback
+    void save() {
+        if (presetName.empty()) return;
+        savePreset(getPathFor(presetName));
+    }
+
+    void showPresetMenu(Widget_t *w) {
+        createPrestList();
+        Widget_t *menu = create_menu(w, 20);
+        menu->parent_struct = (void*)this;
+        Widget_t *menuSave = menu_add_item(menu, "Save");
+        menuSave->parent_struct = (void*)this;
+        Widget_t *menuSaveAs = menu_add_item(menu, "Save As...");
+        menuSaveAs->parent_struct = (void*)this;
+        Widget_t *loadSub = cmenu_add_submenu(menu, "Load");
+        loadSub->parent_struct = (void*)this;
+        for (size_t i = 0; i < presetFiles.size(); ++i) {
+            menu_add_entry(loadSub, presetFiles[i].c_str());
+        }
+        menuSave->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            Loopino *self = static_cast<Loopino*>(w->parent_struct);
+            self->save();
+        };
+        menuSaveAs->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            Loopino *self = static_cast<Loopino*>(w->parent_struct);
+            self->saveAs();
+        };
+        loadSub->func.value_changed_callback = [](void *w_, void *user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            Loopino *self = static_cast<Loopino*>(w->parent_struct);
+            int id = (int)w->adj->value;
+            if (id >= 0 && id < (int)self->presetFiles.size()) {
+                std::string name = self->presetFiles[id];
+                std::string path = self->getPathFor(name);
+                self->loadPreset(path);
+            }
+        };
+        pop_menu_show(w, menu, 8, true);
+
+    }
+
+    static void presets_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        if (w->flags & HAS_POINTER && !*(int*)user_data){
+            self->showPresetMenu(w);
+        }
+    }
 
     void getConfigFilePath() {
          if (getenv("XDG_CONFIG_HOME")) {
             std::string path = getenv("XDG_CONFIG_HOME");
             configFile = path + "/loopino/loopino.conf";
             presetFile = path + "/loopino/loopino.presets";
+            presetDir = path + "/loopino/";
         } else {
         #if defined(__linux__) || defined(__FreeBSD__) || \
             defined(__NetBSD__) || defined(__OpenBSD__)
             std::string path = getenv("HOME");
             configFile = path +"/.config/loopino/loopino.conf";
             presetFile = path +"/.config/loopino/loopino.presets";
+            presetDir = path +"/.config/loopino/";
         #else
             std::string path = getenv("APPDATA");
             configFile = path +"\\.config\\loopino\\loopino.conf";
             presetFile = path +"\\.config\\loopino\\loopino.presets";
+            presetDir = path +"\\.config\\loopino\\";
         #endif
        }
     }
@@ -1493,8 +1554,18 @@ private:
         if (!out) return false;
 
         writeValue(out, numData);
-        out.write(reinterpret_cast<const char*>(samples), numData * sizeof(float));
 
+        float maxVal = 0.0f;
+        for (size_t i = 0; i < numData; ++i) {
+            maxVal = max(maxVal, std::fabs(samples[i]));
+        }
+        if (maxVal < 1e-9f) maxVal = 1.0f;
+        
+        for (size_t i = 0; i < numData; ++i) {
+            float normalized = samples[i] / maxVal;
+            int16_t encoded = static_cast<int16_t>(std::round(normalized * 32767.0f));
+            writeValue(out,encoded);
+        }
         return true;
     }
 
@@ -1505,8 +1576,12 @@ private:
         if (numData == 0) return false;
 
         samples = new float[numData];
-        in.read(reinterpret_cast<char*>(samples), numData * sizeof(float));
-
+        
+        for (size_t i = 0; i < numData; ++i) {
+            int16_t encoded;
+            readValue(in,encoded);
+            samples[i] = static_cast<float>(encoded) / 32767.0f;
+        }
         return true;
     }
 
@@ -1520,7 +1595,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 1; // guard for future proof
+        header.version = 2; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -1534,6 +1609,9 @@ private:
         writeControllerValue(out, setLoopSize);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
+        out.close();
+        std::string tittle = "loopino: " + presetName;
+        widget_set_title(w_top, tittle.data());
         return true;
     }
 
@@ -1550,7 +1628,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 1) {
+        if (header.version > 2) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -1564,7 +1642,12 @@ private:
         readControllerValue(in, setLoopSize);
 
         readSampleBuffer(in, af.samples, af.samplesize);
+        in.close();
         loadPresetToSynth();
+        std::filesystem::path p = filename;
+        presetName = p.stem();
+        std::string tittle = "loopino: " + presetName;
+        widget_set_title(w_top, tittle.data());
         return true;
     }
 

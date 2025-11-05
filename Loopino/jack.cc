@@ -57,6 +57,7 @@ void process_midi(void* midi_input_port_buf) {
         jack_midi_event_get(&in_event, midi_input_port_buf, i);
         if ((in_event.buffer[0] & 0xf0) == 0xc0) {  // program change on any midi channel
             //fprintf(stderr,"program changed %i", (int)in_event.buffer[1]);
+            ui.loadPresetNum((int)in_event.buffer[1]);
         } else if ((in_event.buffer[0] & 0xf0) == 0xb0) {   // controller
             if (in_event.buffer[1]== 120) { // engine mute by All Sound Off on any midi channel
                 //fprintf(stderr,"mute %i", (int)in_event.buffer[2]);
