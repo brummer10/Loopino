@@ -46,7 +46,20 @@ endif
 	VER = 0.1
 
 	PREFIX ?= /usr
-	BIN_DIR ?= $(PREFIX)/bin
+	# check if user is root
+	user = $(shell whoami)
+	ifeq ($(user),root)
+	INSTALL_DIR ?= $(PREFIX)/lib/lv2
+	EXE_INSTALL_DIR ?= $(PREFIX)/bin
+	CLAP_INSTAL_DIR ?= $(PREFIX)/lib/clap
+	VST2_INSTAL_DIR ?= $(PREFIX)/lib/vst
+	else 
+	INSTALL_DIR ?= ~/.lv2
+	EXE_INSTALL_DIR ?= ~/bin
+	CLAP_INSTAL_DIR ?= ~/.clap
+	VST2_INSTAL_DIR ?= ~/.vst
+	endif
+
 	SHARE_DIR ?= $(PREFIX)/share
 	DESKAPPS_DIR ?= $(SHARE_DIR)/applications
 	PIXMAPS_DIR ?= $(SHARE_DIR)/pixmaps
@@ -111,10 +124,10 @@ all : check $(NAME)
 debug : all
 
 
-# clap: $(NAME).clap
-#	$(QUIET)mkdir -p ../bin/
-#	$(QUIET)cp ./$(NAME).clap ../bin/
-#	@$(B_ECHO) "=================== DONE =======================$(reset)"
+clap: $(NAME).clap
+	$(QUIET)mkdir -p ../bin/
+	$(QUIET)cp ./$(NAME).clap ../bin/
+	@$(B_ECHO) "=================== DONE =======================$(reset)"
 
 -include $(DEPS)
 
@@ -127,23 +140,38 @@ endif
 clean :
 	$(QUIET)rm -f *.o *.d *.a *.lib 
 	$(QUIET)rm -f $(RESAMP_DIR)*.a $(RESAMP_DIR)*.lib $(RESAMP_DIR)*.o $(RESAMP_DIR)*.d
-	$(QUIET)rm -f $(NAME).exe $(NAME)
+	$(QUIET)rm -f $(NAME).exe $(NAME) $(NAME).clap
 	$(QUIET)rm -rf ../bin
 
 dist-clean :
 
 install :
-	$(QUIET)mkdir -p $(DESTDIR)$(BIN_DIR)
-	$(QUIET)cp ./$(BUILD_DIR)/$(NAME) $(DESTDIR)$(BIN_DIR)/$(NAME)
+ifneq ("$(wildcard ../bin/$(NAME)$(EXE))","")
+	$(QUIET)mkdir -p $(DESTDIR)$(EXE_INSTALL_DIR)
+	$(QUIET)cp ./$(BUILD_DIR)/$(NAME) $(DESTDIR)$(EXE_INSTALL_DIR)/$(NAME)
+  ifeq ($(user),root)
 	$(QUIET)mkdir -p $(DESTDIR)$(DESKAPPS_DIR)
 	$(QUIET)cp $(NAME).desktop $(DESTDIR)$(DESKAPPS_DIR)
 	$(QUIET)cp $(NAME).svg $(DESTDIR)$(PIXMAPS_DIR)
 	$(QUIET)update-desktop-database || true
+  endif
+else
+	@$(B_ECHO) "$(NAME)$(EXE) Standalone skipped$(reset)"
+endif
+ifneq ("$(wildcard ../bin/$(NAME).clap)","")
+	@$(B_ECHO) "Install  $(NAME).clap to $(DESTDIR)$(CLAP_INSTAL_DIR)/$(reset)"
+	$(QUIET)mkdir -p $(DESTDIR)$(CLAP_INSTAL_DIR)/
+	$(QUIET)cp -r ../bin/$(NAME).clap $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
+	@$(B_ECHO) ". ., done$(reset)"
+else
+	@$(B_ECHO) "$(NAME).clap Clap skipped$(reset)"
+endif
 
 uninstall :
-	$(QUIET)rm -rf $(DESTDIR)$(BIN_DIR)/$(NAME)
+	$(QUIET)rm -rf $(DESTDIR)$(EXE_INSTALL_DIR)/$(NAME)
 	$(QUIET)rm -rf $(DESTDIR)$(DESKAPPS_DIR)/$(NAME).desktop
 	$(QUIET)rm -rf $(DESTDIR)$(PIXMAPS_DIR)/$(NAME).svg
+	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
 
 $(RESAMP_OBJ): $(RESAMP_SOURCES)
 	@$(ECHO) "Building object file $@ $(reset)"
@@ -154,7 +182,7 @@ $(RESAMP_LIB): $(RESAMP_OBJ)
 	$(QUIET)$(AR) rcs $(RESAMP_LIB) $(RESAMP_OBJ)
 	@$(B_ECHO) "=================== DONE =======================$(reset)"
 
-$(NAME).clap: Loopino_ui.h  $(RESAMP_LIB)
+$(NAME).clap:  $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
 	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME).clap
 ifeq (,$(filter yes,$(DEBUG)))

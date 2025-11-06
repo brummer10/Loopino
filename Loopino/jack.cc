@@ -87,6 +87,7 @@ int jack_process(jack_nframes_t nframes, void *arg) {
     float *output1 = static_cast<float *>(jack_port_get_buffer (out1_port, nframes));
 
     static float fRec0[2] = {0};
+    static float fRec1[2] = {0};
 
     process_midi(midi_in);
 
@@ -116,11 +117,11 @@ int jack_process(jack_nframes_t nframes, void *arg) {
     }
     float fSlow0 = 0.0010000000000000009 * ui.gain;
     for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
-        fRec0[0] = fSlow0 + 0.999 * fRec0[1];
-        output[i] += ui.synth.process() * fRec0[0];
-        output1[i] += ui.synth.process() * fRec0[0];
+        fRec1[0] = fSlow0 + 0.999 * fRec1[1];
+        output[i] += ui.synth.process() * fRec1[0];
+        output1[i] += ui.synth.process() * fRec1[0];
+        fRec1[1] = fRec1[0];
     }
-    fRec0[1] = fRec0[0];
 
     return 0;
 }

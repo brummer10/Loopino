@@ -22,11 +22,13 @@
 #include <limits>
 #include <cstdint>
 
+#include "ParallelThread.h"
 #include "SupportedFormats.h"
 #include "AudioFile.h"
 #include "PitchTracker.h"
 #include "LoopGenerator.h"
 #include "SamplePlayer.h"
+#include "Parameter.h"
 
 #include "TextEntry.h"
 #include "xwidgets.h"
@@ -44,14 +46,18 @@
 class Loopino : public TextEntry
 {
 public:
+    Xputty app;
+    Widget_t *w_top;
     Widget_t *w;
     Widget_t *lw;
     Widget_t *keyboard;
     ParallelThread pa;
+    ParallelThread fetch;
     AudioFile af;
     PitchTracker pt;
     LoopGenerator lg;
     PolySynth synth;
+    Params param;
     
     std::vector<float> loopBuffer;
     std::vector<float> sampleBuffer;
@@ -91,6 +97,7 @@ public:
     bool play;
     bool play_loop;
     bool ready;
+    bool havePresetToLoad;
 
     Loopino() : af() {
         jack_sr = 0;
@@ -107,6 +114,7 @@ public:
         play = false;
         play_loop = false;
         ready = true;
+        havePresetToLoad = false;
         matches = 0;
         currentLoop = 0;
         loopPeriods = 1;
@@ -117,7 +125,19 @@ public:
         loopPitchCorrection = 0;
         loopRootkey = 60;
         loadPresetMIDI = -1;
+        p = 0;
+        firstLoop = true;
+        attack = 0.01f;
+        decay = 0.1f;
+        release = 0.8f;
+        sustain = 0.3f;
+        frequency = 440.0f;
+        volume = 0.0f;
+        useLoop = 0;
         generateKeys();
+        #if defined (RUN_AS_CLAP_PLUGIN)
+        registerParameters();
+        #endif
     };
 
     ~Loopino() {
@@ -170,15 +190,32 @@ public:
     }
 
 /****************************************************************
+                 Clap wrapper
+****************************************************************/
+
+    void markDirty(int num) {
+        #if defined (RUN_AS_CLAP_PLUGIN)
+        param.setParamDirty(num , true);
+        param.controllerChanged.store(true, std::memory_order_release);
+        #endif
+    }
+
+#if defined (RUN_AS_CLAP_PLUGIN)
+#include "Clap/LoopinoClapWrapper.cc"
+#endif
+
+/****************************************************************
                       main window
 ****************************************************************/
 
     // create the main GUI
     void createGUI(Xputty *app) {
+        #ifndef RUN_AS_CLAP_PLUGIN
         set_custom_theme(app);
         w_top = create_window(app, os_get_root_window(app, IS_WINDOW), 0, 0, 880, 290);
         widget_set_title(w_top, "loopino");
         widget_set_icon_from_png(w_top,LDVAR(loopino_png));
+        #endif
         #if defined(__linux__) || defined(__FreeBSD__) || \
             defined(__NetBSD__) || defined(__OpenBSD__)
         widget_set_dnd_aware(w_top);
@@ -325,14 +362,14 @@ public:
         Presets->func.value_changed_callback = presets_callback;
         commonWidgetSettings(Presets);
 
-        volume = add_knob(lw, "dB",255,145,38,38);
-        volume->scale.gravity = SOUTHWEST;
-        volume->flags |= HAS_TOOLTIP;
-        add_tooltip(volume, "Volume (dB)");
-        set_adjustment(volume->adj, 0.0, 0.0, -20.0, 6.0, 0.1, CL_CONTINUOS);
-        volume->func.expose_callback = draw_knob;
-        volume->func.value_changed_callback = volume_callback;
-        commonWidgetSettings(volume);
+        Volume = add_knob(lw, "dB",255,145,38,38);
+        Volume->scale.gravity = SOUTHWEST;
+        Volume->flags |= HAS_TOOLTIP;
+        add_tooltip(Volume, "Volume (dB)");
+        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 6.0, 0.1, CL_CONTINUOS);
+        Volume->func.expose_callback = draw_knob;
+        Volume->func.value_changed_callback = volume_callback;
+        commonWidgetSettings(Volume);
 
         setLoop = add_image_toggle_button(lw, "", 300, 148, 35, 35);
         setLoop->scale.gravity = SOUTHWEST;
@@ -358,6 +395,7 @@ public:
         playbutton->func.value_changed_callback = button_playbutton_callback;
         commonWidgetSettings(playbutton);
 
+        #ifndef RUN_AS_CLAP_PLUGIN
         w_quit = add_button(lw, "", 390, 148, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
         w_quit->scale.gravity = SOUTHWEST;
@@ -365,6 +403,7 @@ public:
         add_tooltip(w_quit, "Exit");
         w_quit->func.value_changed_callback = button_quit_callback;
         commonWidgetSettings(w_quit);
+        #endif
 
         keyboard = add_midi_keyboard(w_top, "Organ", 0, 190, 880, 100);
         keyboard->flags |= HIDE_ON_DELETE;
@@ -374,8 +413,9 @@ public:
         keys->mk_send_note = get_note;
         keys->mk_send_all_sound_off = all_notes_off;
 
+        #ifndef RUN_AS_CLAP_PLUGIN
         widget_show_all(w_top);
-
+        #endif
         pa.startTimeout(60);
         pa.set<Loopino, &Loopino::updateUI>(this);
         getConfigFilePath();
@@ -383,7 +423,6 @@ public:
     }
 
 private:
-    Widget_t *w_top;
     Widget_t *w_quit;
     Widget_t *filebutton;
     Widget_t *wview;
@@ -391,7 +430,7 @@ private:
     Widget_t *loopMark_L;
     Widget_t *loopMark_R;
     Widget_t *playbutton;
-    Widget_t *volume;
+    Widget_t *Volume;
     Widget_t *saveLoop;
     Widget_t *clip;
     Widget_t *setLoop;
@@ -406,9 +445,12 @@ private:
     Widget_t *Release;
     Widget_t *Frequency;
 
+    Window    p;
+
     SupportedFormats supportedFormats;
 
     bool is_loaded;
+    bool firstLoop;
     std::string newLabel;
     std::vector<std::string> keys;
     std::vector<std::string> presetFiles;
@@ -418,6 +460,14 @@ private:
     std::string presetDir;
     std::string presetName;
     int loadPresetMIDI;
+    
+    float attack;
+    float decay;
+    float sustain;
+    float release;
+    float frequency;
+    float volume;
+    int useLoop;
 
 /****************************************************************
                     Create loop samples
@@ -785,7 +835,9 @@ private:
     static void button_set_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        if (adj_get_value(w->adj)){
+        self->useLoop = (int)adj_get_value(w->adj);
+        self->markDirty(6);
+        if (self->useLoop){
             self->synth.setLoop(true);
         } else {
             self->synth.setLoop(false);
@@ -797,6 +849,7 @@ private:
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->loopPeriods = (int)(adj_get_value(w->adj));
+        self->markDirty(7);
         if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
     }
 
@@ -1001,42 +1054,54 @@ private:
     static void attack_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->synth.setAttack(adj_get_value(w->adj));
+        self->attack = adj_get_value(w->adj);
+        self->markDirty(0);
+        self->synth.setAttack(self->attack);
     }
 
     // Decay control
     static void decay_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->synth.setDecay(adj_get_value(w->adj));
+        self->decay = adj_get_value(w->adj);
+        self->markDirty(1);
+        self->synth.setDecay(self->decay);
     }
 
     // Sustain control
     static void sustain_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->synth.setSustain(adj_get_value(w->adj));
+        self->sustain = adj_get_value(w->adj);
+        self->markDirty(2);
+        self->synth.setSustain(self->sustain);
     }
 
     // Release control
     static void release_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->synth.setRelease(adj_get_value(w->adj));
+        self->release = adj_get_value(w->adj);
+        self->markDirty(3);
+        self->synth.setRelease(self->release);
     }
 
     // Frequency control
     static void frequency_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->synth.setRootFreq(adj_get_value(w->adj));
+        self->frequency = adj_get_value(w->adj);
+        self->markDirty(4);
+        self->synth.setRootFreq(self->frequency);
     }
 
     // volume control
     static void volume_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->gain = std::pow(1e+01, 0.05 * adj_get_value(w->adj));
+        self->volume = adj_get_value(w->adj);
+        self->markDirty(5);
+        self->gain = std::pow(1e+01, 0.05 * self->volume);
     }
 
 /****************************************************************
@@ -1522,33 +1587,36 @@ private:
     };
 
     // Helper functions
-    template <typename T>
-    void writeString(std::ofstream& out, T& v) {
+    template <typename O, typename T>
+    void writeString(O& out, T& v) {
         out.write(reinterpret_cast<char*>(&v), sizeof(T));
     }
 
-    template <typename T>
-    void writeValue(std::ofstream& out, const T& v) {
+    template <typename O, typename T>
+    void writeValue(O& out, const T& v) {
         out.write(reinterpret_cast<const char*>(&v), sizeof(T));
     }
 
-    template <typename T>
-    void readValue(std::ifstream& in, T& v) {
+    template <typename I, typename T>
+    void readValue(I& in, T& v) {
         in.read(reinterpret_cast<char*>(&v), sizeof(T));
     }
 
-    void writeControllerValue(std::ofstream& out, Widget_t *w) {
+    template <typename T>
+    void writeControllerValue(T& out, Widget_t *w) {
         float v = adj_get_value(w->adj);
         writeValue(out, v);
     }
 
-    void readControllerValue(std::ifstream& in, Widget_t *w) {
+    template <typename T>
+    void readControllerValue(T& in, Widget_t *w) {
         float v = 0.0;
         readValue(in , v);
         adj_set_value(w->adj, v);
     }
 
-    bool writeSampleBuffer(std::ofstream& out, const float* samples, uint32_t numData) {
+    template <typename T>
+    bool writeSampleBuffer(T& out, const float* samples, uint32_t numData) {
         if (!samples || numData == 0) return false;
 
         if (!out) return false;
@@ -1569,7 +1637,8 @@ private:
         return true;
     }
 
-    bool readSampleBuffer(std::ifstream& in, float*& samples, uint32_t& numData) {
+    template <typename T>
+    bool readSampleBuffer(T& in, float*& samples, uint32_t& numData) {
         if (!in) return false;
 
         readValue(in, numData);

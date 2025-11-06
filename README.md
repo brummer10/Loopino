@@ -23,7 +23,7 @@ The GUI is created with libxputty.
 - libcairo2-dev
 - libx11-dev
 
-## Building from source code
+## Building the Standalone from source code
 
 ```shell
 git clone https://github.com/brummer10/Loopino.git
@@ -31,4 +31,16 @@ cd Loopino
 git submodule update --init --recursive
 make
 sudo make install # will install into /usr/bin
+```
+
+## Building as Clap plugin from source code
+
+```shell
+git clone https://github.com/brummer10/Loopino.git
+cd Loopino
+git submodule update --init --recursive
+make clap
+sudo make install # will install into /usr/lib/clap
+or
+make install # will install into ~/.clap
 ```
