@@ -68,7 +68,9 @@
         widget_show_all(w_top);
         setValuesFromHost();
         if (havePresetToLoad) {
-            loadPresetToSynth();
+            adj_set_max_value(wview->adj, (float)af.samplesize);
+            adj_set_state(loopMark_L->adj, 0.0);
+            adj_set_state(loopMark_R->adj,1.0);
             havePresetToLoad = false;
         }
         loadNew = true;

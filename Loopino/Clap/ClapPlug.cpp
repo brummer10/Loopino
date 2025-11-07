@@ -235,7 +235,10 @@ static bool state_save(const clap_plugin_t *plugin, const clap_ostream_t *stream
 
 static bool state_load(const clap_plugin_t *plugin, const clap_istream_t *stream) {
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
-    if (plug->r->readState(stream)) return true;
+    if (plug->r->readState(stream)) {
+        plug->r->loadPresetToSynth();
+        return true;
+    }
     return false;
 }
 
@@ -419,21 +422,26 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
 
             case CLAP_EVENT_MIDI: {
                 const clap_event_midi_t *ev = (const clap_event_midi_t *)hdr;
-                MidiKeyboard* keys = (MidiKeyboard*)plug->r->keyboard->private_struct;
+                MidiKeyboard* keys = nullptr;
+                if (plug->guiIsCreated)
+                    keys = (MidiKeyboard*)plug->r->keyboard->private_struct;
                 if ((ev->data[0] & 0xf0) == 0xc0) {  // program change on any midi channel
                     plug->r->loadPresetNum((int)(ev->data[1]));
                 } else if ((ev->data[0] & 0xf0) == 0x90) {   // Note On
                     int velocity = (int)ev->data[2];
                     if (velocity < 1) {
                         plug->r->synth.noteOff((int)(ev->data[1]));
-                        set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], false);
+                        if (plug->guiIsCreated)
+                            set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], false);
                     } else {
                         plug->r->synth.noteOn((int)(ev->data[1]), (float)((float)velocity/127.0f));
-                        set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], true);
+                        if (plug->guiIsCreated)
+                            set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], true);
                     }
                 } else if ((ev->data[0] & 0xf0) == 0x80) {   // Note Off
                     plug->r->synth.noteOff((int)(ev->data[1]));
-                    set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], false);
+                    if (plug->guiIsCreated)
+                        set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], false);
                 }
                 break;
             }

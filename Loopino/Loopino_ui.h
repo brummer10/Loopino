@@ -135,6 +135,7 @@ public:
         volume = 0.0f;
         useLoop = 0;
         generateKeys();
+        guiIsCreated = false;
         #if defined (RUN_AS_CLAP_PLUGIN)
         registerParameters();
         #endif
@@ -187,6 +188,16 @@ public:
     void loadPresetNum(int v) {
         if (v < 0 || v > (int)presetFiles.size()) return;
         loadPresetMIDI = v;
+    }
+
+    void loadPresetToSynth() {
+        af.channels = 1;
+        loopPoint_l = 0;
+        loopPoint_r = af.samplesize;
+        setOneShootBank();
+        if (createLoop()) {
+            setLoopToBank();
+        } 
     }
 
 /****************************************************************
@@ -420,6 +431,7 @@ public:
         pa.set<Loopino, &Loopino::updateUI>(this);
         getConfigFilePath();
         createPrestList();
+        guiIsCreated = true;
     }
 
 private:
@@ -451,6 +463,7 @@ private:
 
     bool is_loaded;
     bool firstLoop;
+    bool guiIsCreated;
     std::string newLabel;
     std::vector<std::string> keys;
     std::vector<std::string> presetFiles;
@@ -596,13 +609,15 @@ private:
         }
         loadLoopNew = true;
         play_loop = true;
-        update_waveview(loopview, loopBuffer.data(), loopBuffer.size());
-        uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
-        std::string tittle = "loopino: loop size " + std::to_string(length)
-                            + " Samples | Key Note " + keys[loopRootkey]
-                            + " | loop " + std::to_string(currentLoop)
-                            + " from " + std::to_string(matches - 1);
-        widget_set_title(w_top, tittle.data());
+        if (guiIsCreated) {
+            update_waveview(loopview, loopBuffer.data(), loopBuffer.size());
+            uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
+            std::string tittle = "loopino: loop size " + std::to_string(length)
+                                + " Samples | Key Note " + keys[loopRootkey]
+                                + " | loop " + std::to_string(currentLoop)
+                                + " from " + std::to_string(matches - 1);
+            widget_set_title(w_top, tittle.data());
+        }
         setLoopBank();
     }
 
@@ -1718,26 +1733,18 @@ private:
 
         readSampleBuffer(in, af.samples, af.samplesize);
         in.close();
+        adj_set_max_value(wview->adj, (float)af.samplesize);
+        adj_set_state(loopMark_L->adj, 0.0);
+        adj_set_state(loopMark_R->adj,1.0);
+        loadLoopNew = true;
+        loadNew = true;
+        update_waveview(wview, af.samples, af.samplesize);
         loadPresetToSynth();
         std::filesystem::path p = filename;
         presetName = p.stem();
         std::string tittle = "loopino: " + presetName;
         widget_set_title(w_top, tittle.data());
         return true;
-    }
-
-    void loadPresetToSynth() {
-        af.channels = 1;
-        adj_set_max_value(wview->adj, (float)af.samplesize);
-        adj_set_state(loopMark_L->adj, 0.0);
-        loopPoint_l = 0;
-        adj_set_state(loopMark_R->adj,1.0);
-        loopPoint_r = af.samplesize;
-        loadLoopNew = true;
-        loadNew = true;
-        update_waveview(wview, af.samples, af.samplesize);
-        setOneShootBank();
-        button_setLoop_callback(setLoop, NULL);        
     }
 
 };
