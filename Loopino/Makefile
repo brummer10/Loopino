@@ -184,9 +184,9 @@ $(RESAMP_LIB): $(RESAMP_OBJ)
 
 $(NAME).clap:  $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -g -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME).clap
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME).clap
 ifeq (,$(filter yes,$(DEBUG)))
-	#$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
+	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
 endif
 
 $(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h
