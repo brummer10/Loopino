@@ -423,8 +423,14 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
                 if ((ev->data[0] & 0xf0) == 0xc0) {  // program change on any midi channel
                     plug->r->loadPresetNum((int)(ev->data[1]));
                 } else if ((ev->data[0] & 0xf0) == 0x90) {   // Note On
-                    plug->r->synth.noteOn((int)(ev->data[1]), (float)((float)ev->data[2]/127.0));
-                    set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], true);
+                    int velocity = (int)ev->data[2];
+                    if (velocity < 1) {
+                        plug->r->synth.noteOff((int)(ev->data[1]));
+                        set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], false);
+                    } else {
+                        plug->r->synth.noteOn((int)(ev->data[1]), (float)((float)velocity/127.0f));
+                        set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], true);
+                    }
                 } else if ((ev->data[0] & 0xf0) == 0x80) {   // Note Off
                     plug->r->synth.noteOff((int)(ev->data[1]));
                     set_key_in_matrix(keys->in_key_matrix[0], (int)ev->data[1], false);

@@ -68,8 +68,14 @@ void process_midi(void* midi_input_port_buf) {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }
         } else if ((in_event.buffer[0] & 0xf0) == 0x90) {   // Note On
-            ui.synth.noteOn((int)(in_event.buffer[1]), (float)((float)in_event.buffer[2]/127.0));
-            set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], true);
+            int velocity = in_event.buffer[2];
+            if (velocity < 1) {
+                ui.synth.noteOff((int)(in_event.buffer[1]));
+                set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], false);
+            } else {
+                ui.synth.noteOn((int)(in_event.buffer[1]), (float)((float)velocity/127.0f));
+                set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], true);
+            }
             //fprintf(stderr,"Note On %i", (int)in_event.buffer[1]);
         }else if ((in_event.buffer[0] & 0xf0) == 0x80) {   // Note Off
             //fprintf(stderr,"Note Off %i", (int)in_event.buffer[1]);

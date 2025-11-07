@@ -210,6 +210,7 @@
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
+        af.channels = 1;
         in->read(in, &currentLoop, sizeof(currentLoop));
         in->read(in, &attack, sizeof(attack));
         in->read(in, &decay, sizeof(decay));

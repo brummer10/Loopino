@@ -503,7 +503,7 @@ private:
 
     bool createLoop() {
         getPitch();
-        if (rootkey) {
+        if (freq > 0.0) {
             LoopGenerator::LoopInfo loopinfo;
             loopBuffer.clear();
             if (lg.generateLoop(af.samples, loopPoint_l, loopPoint_r, af.samplesize ,
@@ -529,10 +529,12 @@ private:
             }
             return true;
         } else {
-            Widget_t *dia = open_message_dialog(w, ERROR_BOX, "loopino",
-                                                _("Fail to get root Frequency"),NULL);
-            os_set_transient_for_hint(w, dia);
-            return false;
+            if (jack_sr && af.samples) {
+                Widget_t *dia = open_message_dialog(w, ERROR_BOX, "loopino",
+                                                    _("Fail to get root Frequency"),NULL);
+                os_set_transient_for_hint(w, dia);
+                return false;
+            }
         }
         return false;
     }
@@ -1578,6 +1580,10 @@ private:
             presetDir = path +"\\.config\\loopino\\";
         #endif
        }
+        std::filesystem::path p = std::filesystem::path(presetFile).parent_path().u8string();
+        if (!std::filesystem::exists(p)) {
+            std::filesystem::create_directory(p);
+        }
     }
 
     struct PresetHeader {
