@@ -205,7 +205,8 @@
 
         in->read(in, &numData, sizeof(numData));
         if (numData == 0) return false;
-
+        delete[] samples;
+        samples = nullptr;
         samples = new float[numData];
         
         for (size_t i = 0; i < numData; ++i) {

@@ -348,20 +348,22 @@ public:
         Frequency->func.value_changed_callback = frequency_callback;
         commonWidgetSettings(Frequency);
 
-        Resonance = add_knob(w, "Resonance",280,145,38,38);
+        Resonance = add_knob(w, "Resonance",285,145,38,38);
         Resonance->scale.gravity = SOUTHWEST;
         Resonance->flags |= HAS_TOOLTIP;
         add_tooltip(Resonance, "Resonance");
         set_adjustment(Resonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(Resonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
         Resonance->func.expose_callback = draw_knob;
         Resonance->func.value_changed_callback = resonance_callback;
         commonWidgetSettings(Resonance);
 
-        CutOff = add_knob(w, "CutOff",320,145,38,38);
+        CutOff = add_knob(w, "CutOff",325,145,38,38);
         CutOff->scale.gravity = SOUTHWEST;
         CutOff->flags |= HAS_TOOLTIP;
         add_tooltip(CutOff, "CutOff");
         set_adjustment(CutOff->adj, 127.0, 127.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(CutOff, (Color_state)1, (Color_mod)2, 0.1, 0.78, 0.85, 1.0);
         CutOff->func.expose_callback = draw_knob;
         CutOff->func.value_changed_callback = cutoff_callback;
         commonWidgetSettings(CutOff);
@@ -417,7 +419,8 @@ public:
         Volume->scale.gravity = SOUTHWEST;
         Volume->flags |= HAS_TOOLTIP;
         add_tooltip(Volume, "Volume (dB)");
-        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 20.0, 0.1, CL_CONTINUOS);
+        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 12.0, 0.1, CL_CONTINUOS);
+        set_widget_color(Volume, (Color_state)1, (Color_mod)2, 0.38, 0.62, 0.94, 1.0);
         Volume->func.expose_callback = draw_knob;
         Volume->func.value_changed_callback = volume_callback;
         commonWidgetSettings(Volume);

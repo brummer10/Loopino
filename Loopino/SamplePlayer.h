@@ -232,6 +232,8 @@ struct LadderFilter {
     double cutoff = 1000.0;
     double resonance = 0.0;
     double sampleRate = 44100.0;
+    double feedback = 1.0;
+    double tunning = 0.5;
 
     void setSampleRate(double sr) {sampleRate = sr;}
 
@@ -243,21 +245,16 @@ struct LadderFilter {
     }
 
     inline double process(double in) {
-        // Normalized cutoff + simple tuning correction
-        double f = cutoff / sampleRate;
-        f = std::clamp(f, 0.0, 0.45);             // keep stable
-        double fc = 2.0 * f;                     // cheap approximate tuning
-        double fb = resonance * 4.0 * (1.0 - 0.15 * fc * fc); // resonance feedback
 
         // Feedback from 4th stage
-        in -= z4 * fb;
-        in = tanh_fast(in); // std::tanh soft clip for stability / analog feel
+        in -= z4 * feedback;
+        in = tanh_fast(in); // std::tanh
 
         // 4 cascaded one-pole filters
-        z1 += fc * (in - z1);
-        z2 += fc * (z1 - z2);
-        z3 += fc * (z2 - z3);
-        z4 += fc * (z3 - z4);
+        z1 += tunning * (in - z1);
+        z2 += tunning * (z1 - z2);
+        z3 += tunning * (z2 - z3);
+        z4 += tunning * (z3 - z4);
 
         // resonance loudness compensation
         double resGainComp = 1.0 + (resonance * resonance) * 2.0;
@@ -396,6 +393,12 @@ private:
         // Resonance from CC71 (scaled to 0..1 for ladder)
         double Q = ccToQ(ccReso);
         filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95); // safe mapping
+
+        // Normalized cutoff + simple tuning correction
+        double f = filter.cutoff / filter.sampleRate;
+        f = std::clamp(f, 0.0, 0.45);
+        filter.tunning = 2.0 * f;                                    // cheap approximate tuning
+        filter.feedback = filter.resonance * 4.0 * (1.0 - 0.15 * filter.tunning * filter.tunning); // resonance feedback
     }
 
 };
