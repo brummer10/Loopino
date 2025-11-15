@@ -38,7 +38,6 @@ struct plugin_t {
     clap_plugin_t plugin;
     const clap_host_t *host;
     Loopino *r;
-    std::stringstream state;
     bool isInited;
     bool guiIsCreated;
     uint32_t latency;
@@ -294,7 +293,7 @@ static bool gui_set_transient(const clap_plugin_t *plugin, const clap_window_t *
 }
 
 static void gui_suggest_title(const clap_plugin_t *plugin, const char *title) {
-    title = "ImpulseLoader";
+    title = "Loopino";
 }
 
 static bool gui_create(const clap_plugin *plugin, const char *api, bool is_floating) {
@@ -470,29 +469,12 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         plug->r->param.controllerChanged.store(false, std::memory_order_release);
     }
 
-    for (uint32_t i = 0; i < nframes;++i) {
-        while (ev_index < nev && next_ev_frame == i) {
-            const clap_event_header_t *hdr = process->in_events->get(process->in_events, ev_index);
-            if (hdr->time != i) {
-                next_ev_frame = hdr->time;
-                break;
-            }
-            clap_plug_process_event(plug, hdr);
-            sync_params_to_plug(plugin, hdr);
-            ++ev_index;
-
-            if (ev_index == nev) {
-                // we reached the end of the event list
-                next_ev_frame = nframes;
-                break;
-            }
-        }
-    }
 
     static float fRec0[2] = {0};
     if (( plug->r->af.samplesize && plug->r->af.samples != nullptr) && plug->r->play && plug->r->ready) {
         float fSlow0 = 0.0010000000000000009 * plug->r->gain;
         for (uint32_t i = 0; i < nframes; i++) {
+            // process playback
             fRec0[0] = fSlow0 + 0.999 * fRec0[1];
             for (uint32_t c = 0; c < plug->r->af.channels; c++) {
                 if (!c) {
@@ -515,8 +497,27 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         memset(left_output, 0.0, nframes * sizeof(float));
         memset(right_output, 0.0, nframes * sizeof(float));
     }
+    
     float fSlow0 = 0.0010000000000000009 * plug->r->gain;
     for (uint32_t i = 0; i < nframes; i++) {
+        // process events
+        while (ev_index < nev && next_ev_frame == i) {
+            const clap_event_header_t *hdr = process->in_events->get(process->in_events, ev_index);
+            if (hdr->time != i) {
+                next_ev_frame = hdr->time;
+                break;
+            }
+            clap_plug_process_event(plug, hdr);
+            sync_params_to_plug(plugin, hdr);
+            ++ev_index;
+
+            if (ev_index == nev) {
+                // we reached the end of the event list
+                next_ev_frame = nframes;
+                break;
+            }
+        }
+        // process synth
         fRec0[0] = fSlow0 + 0.999 * fRec0[1];
         left_output[i] += plug->r->synth.process() * fRec0[0];
         right_output[i] += plug->r->synth.process() * fRec0[0];
@@ -534,14 +535,12 @@ static bool activate(const struct clap_plugin *plugin,
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
     plug->r->setJackSampleRate(sample_rate);
     plug->isInited = true;
-    //if(!plug->state.empty()) plug->r->readState(plug->state);
     return true;
 }
 
 // clear the state string when we get deactivated
 static void deactivate(const struct clap_plugin *plugin) {
-    plugin_t *plug = (plugin_t *)plugin->plugin_data;
-    plug->state.clear();
+   // plugin_t *plug = (plugin_t *)plugin->plugin_data;
 }
 
 static bool start_processing(const struct clap_plugin *plugin) { return true; }

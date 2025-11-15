@@ -224,6 +224,49 @@ private:
 };
 
 /****************************************************************
+        4-Pole Ladder Filter (Moog style)
+****************************************************************/
+
+struct LadderFilter {
+    double z1=0, z2=0, z3=0, z4=0; // 4 integrator stages
+    double cutoff = 1000.0;
+    double resonance = 0.0;
+    double sampleRate = 44100.0;
+
+    void setSampleRate(double sr) {sampleRate = sr;}
+
+    void reset() { z1=z2=z3=z4=0.0; }
+
+    inline float tanh_fast(float x) {
+        float x2 = x * x;
+        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    }
+
+    inline double process(double in) {
+        // Normalized cutoff + simple tuning correction
+        double f = cutoff / sampleRate;
+        f = std::clamp(f, 0.0, 0.45);             // keep stable
+        double fc = 2.0 * f;                     // cheap approximate tuning
+        double fb = resonance * 4.0 * (1.0 - 0.15 * fc * fc); // resonance feedback
+
+        // Feedback from 4th stage
+        in -= z4 * fb;
+        in = tanh_fast(in); // std::tanh soft clip for stability / analog feel
+
+        // 4 cascaded one-pole filters
+        z1 += fc * (in - z1);
+        z2 += fc * (z1 - z2);
+        z3 += fc * (z2 - z3);
+        z4 += fc * (z3 - z4);
+
+        // resonance loudness compensation
+        double resGainComp = 1.0 + (resonance * resonance) * 2.0;
+
+        return z4 * resGainComp;
+    }
+};
+
+/****************************************************************
         SampleVoice: play one voice
 ****************************************************************/
 
@@ -239,6 +282,7 @@ public:
 
     void setSampleRate(double sr) {
         env.setSampleRate(sr);
+        filter.setSampleRate(sr);
         player.setSampleRate(sr);
     }
 
@@ -252,6 +296,20 @@ public:
 
     void setRootFreq(float freq_) {freq = freq_;}
 
+    void setCutoff(int value) {
+        value = std::clamp(value, 0, 127);
+        ccCutoff = value;
+    }
+
+    void setReso(int value) {
+        value = std::clamp(value, 0, 127);
+        ccReso   = value;
+    }
+
+    void setKeyTracking(float amt) {
+        keyTracking = std::clamp(amt, 0.0f, 1.0f);
+    }
+
     void noteOn(int midiNote, float velocity,
                 const std::vector<float>* sampleData,
                 double sourceRate, double rootFreq, bool looping = true) {
@@ -263,6 +321,8 @@ public:
         player.setFrequency(midiToFreq(midiNote), rootFreq);
         player.setLoop(0, sampleData->size() - 1, looping);
         player.reset();
+        recalcFilter();
+        filter.reset();
         env.noteOn();
     }
 
@@ -283,7 +343,7 @@ public:
         float amp = env.process();
         float out = player.process() * vel * amp;
         if (!env.isActive()) active = false;
-        return out;
+        return filter.process(out);
     }
 
     bool isActive() const { return active; }
@@ -291,14 +351,51 @@ public:
 private:
     SamplePlayer player;
     ADSR env;
+    LadderFilter filter;
+
     bool active = false;
     bool looping = true;
     float vel = 1.0f;
     float freq = 440.0;
     int midiNote = -1;
 
+    int ccCutoff = 127;
+    int ccReso = 0;
+    float keyTracking = 0.5f;
+
+    const float minFreq = 20.0;
+    const float maxFreq = 20000.0;
+    const float minQ = 0.6;
+    const float maxQ = 10.0;
+
+    double ccToFreq(int v) const {
+        double t = v / 127.0;
+        return minFreq * std::pow(maxFreq/minFreq, t);
+    }
+
+    double ccToQ(int v) const {
+        double t = std::pow(v / 127.0, 0.8);
+        return minQ + t * (maxQ - minQ);
+    }
+
     inline double midiToFreq(int midiNote) {
         return freq * std::pow(2.0, (midiNote - 69) / 12.0);
+    }
+
+    void recalcFilter() {
+        // Base cutoff from CC74
+        float baseCut = ccToFreq(ccCutoff);
+
+        // Key tracking
+        float semi = midiNote - 60;
+        float keyFactor = std::pow(2.0f, (semi / 12.0f) * keyTracking);
+        double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
+
+        filter.cutoff = finalCut;
+
+        // Resonance from CC71 (scaled to 0..1 for ladder)
+        double Q = ccToQ(ccReso);
+        filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95); // safe mapping
     }
 
 };
@@ -356,6 +453,25 @@ public:
     void setRootFreq(float freq) {
         for (auto& v : voices) {
             v.setRootFreq(freq);
+        }
+    }
+
+    void setCutoff(int value) {
+        for (auto& v : voices) {
+            v.setCutoff(value);
+        }
+    }
+
+    void setReso(int value) {
+        for (auto& v : voices) {
+            v.setReso(value);
+        }
+    }
+
+    void setKeyTracking(float amt) {
+        float value = std::clamp(amt, 0.0f, 1.0f);
+        for (auto& v : voices) {
+            v.setKeyTracking(value);
         }
     }
 

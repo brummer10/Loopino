@@ -21,17 +21,33 @@
         param.registerParam("Volume",    "Synth", -20.0, 6.0, 0.0, 0.1,   (void*)&volume,      false,  IS_FLOAT);
         param.registerParam("Use Loop",  "Synth", 0, 1, 0, 1,             (void*)&useLoop,     true,   IS_INT);
         param.registerParam("Loop Size", "Synth", 1, 12, 1, 1,            (void*)&loopPeriods, true,   IS_INT);
+        param.registerParam("Resonance", "Synth", 0.0, 127.0, 0.0, 1.0,   (void*)&resonance,   true,   IS_FLOAT);
+        param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 127.0, 1.0, (void*)&cutoff,      true,   IS_FLOAT);
     }
 
     void setValuesFromHost() {
-        adj_set_value(Attack->adj, attack);
-        adj_set_value(Decay->adj, decay);
-        adj_set_value(Sustain->adj, sustain);
-        adj_set_value(Release->adj, release);
-        adj_set_value(Frequency->adj, frequency);
-        adj_set_value(Volume->adj, volume);
-        adj_set_value(setLoop->adj, (float)useLoop);
-        adj_set_value(setLoopSize->adj, (float)loopPeriods);
+        if (guiIsCreated) {
+            adj_set_value(Attack->adj, attack);
+            adj_set_value(Decay->adj, decay);
+            adj_set_value(Sustain->adj, sustain);
+            adj_set_value(Release->adj, release);
+            adj_set_value(Frequency->adj, frequency);
+            adj_set_value(Volume->adj, volume);
+            adj_set_value(setLoop->adj, (float)useLoop);
+            adj_set_value(setLoopSize->adj, (float)loopPeriods);
+            adj_set_value(Resonance->adj, resonance);
+            adj_set_value(CutOff->adj, cutoff);
+        } else {
+            synth.setAttack(attack);
+            synth.setDecay(decay);
+            synth.setSustain(sustain);
+            synth.setRelease(release);
+            synth.setRootFreq(freq);
+            synth.setLoop(useLoop);
+            gain = std::pow(1e+01, 0.05 * volume);
+            synth.setReso(resonance);
+            synth.setCutoff(cutoff);
+        }
     }
 
     void startGui(Window window) {
@@ -164,7 +180,7 @@
     void saveState(T* out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 2; // guard for future proof
+        header.version = 3; // guard for future proof
         header.dataSize = af.samplesize;
         out->write(out, &header, sizeof(header));
 
@@ -176,6 +192,9 @@
         out->write(out, &frequency, sizeof(frequency));
         out->write(out, &useLoop, sizeof(useLoop));
         out->write(out, &loopPeriods, sizeof(loopPeriods));
+        // since version 3
+        out->write(out, &resonance, sizeof(resonance));
+        out->write(out, &cutoff, sizeof(cutoff));
 
         writeSamples(out, af.samples, af.samplesize);
     }
@@ -208,7 +227,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 2) {
+        if (header.version > 3) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -221,6 +240,10 @@
         in->read(in, &frequency, sizeof(frequency));
         in->read(in, &useLoop, sizeof(useLoop));
         in->read(in, &loopPeriods, sizeof(loopPeriods));
+        if (header.version > 2) {
+            in->read(in, &resonance, sizeof(resonance));
+            in->read(in, &cutoff, sizeof(cutoff));
+        }
 
         readSamples(in, af.samples, af.samplesize);
         havePresetToLoad = true;

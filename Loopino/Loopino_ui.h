@@ -132,6 +132,8 @@ public:
         release = 0.8f;
         sustain = 0.3f;
         frequency = 440.0f;
+        resonance = 0.0;
+        cutoff = 127.0;
         volume = 0.0f;
         useLoop = 0;
         generateKeys();
@@ -164,7 +166,7 @@ public:
     // receive Sample Rate from audio back-end
     void setJackSampleRate(uint32_t sr) {
         jack_sr = sr;        
-        synth.init((double)jack_sr, 12);
+        synth.init((double)jack_sr, 48);
         //loadPreset(presetFile);
     }
 
@@ -198,6 +200,9 @@ public:
         if (createLoop()) {
             setLoopToBank();
         } 
+        #if defined (RUN_AS_CLAP_PLUGIN)
+        setValuesFromHost();
+        #endif
     }
 
 /****************************************************************
@@ -335,13 +340,48 @@ public:
         Release->func.value_changed_callback = release_callback;
         commonWidgetSettings(Release);
 
-        Frequency = add_valuedisplay(w, _(" Hz"), 230, 150, 65, 30);
+        Frequency = add_valuedisplay(w, _(" Hz"), 220, 150, 60, 30);
         set_adjustment(Frequency->adj, 440.0, 440.0, 370.0, 453.0, 0.1, CL_CONTINUOS);
         Frequency->scale.gravity = SOUTHWEST;
         Frequency->flags |= HAS_TOOLTIP;
         add_tooltip(Frequency, "Snyth Root Freqency");
         Frequency->func.value_changed_callback = frequency_callback;
         commonWidgetSettings(Frequency);
+
+        Resonance = add_knob(w, "Resonance",280,145,38,38);
+        Resonance->scale.gravity = SOUTHWEST;
+        Resonance->flags |= HAS_TOOLTIP;
+        add_tooltip(Resonance, "Resonance");
+        set_adjustment(Resonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        Resonance->func.expose_callback = draw_knob;
+        Resonance->func.value_changed_callback = resonance_callback;
+        commonWidgetSettings(Resonance);
+
+        CutOff = add_knob(w, "CutOff",320,145,38,38);
+        CutOff->scale.gravity = SOUTHWEST;
+        CutOff->flags |= HAS_TOOLTIP;
+        add_tooltip(CutOff, "CutOff");
+        set_adjustment(CutOff->adj, 127.0, 127.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        CutOff->func.expose_callback = draw_knob;
+        CutOff->func.value_changed_callback = cutoff_callback;
+        commonWidgetSettings(CutOff);
+
+        clip = add_button(w, "", 365, 148, 35, 35);
+        clip->scale.gravity = SOUTHWEST;
+        widget_get_png(clip, LDVAR(clip__png));
+        clip->flags |= HAS_TOOLTIP;
+        add_tooltip(clip, "Clip Sample to clip marks");
+        clip->func.value_changed_callback = button_clip_callback;
+        commonWidgetSettings(clip);
+
+        playbutton = add_image_toggle_button(w, "", 400, 148, 35, 35);
+        playbutton->scale.gravity = SOUTHWEST;
+        widget_get_png(playbutton, LDVAR(play_png));
+        playbutton->flags |= HAS_TOOLTIP;
+        add_tooltip(playbutton, "Play Sample");
+        playbutton->func.value_changed_callback = button_playbutton_callback;
+        commonWidgetSettings(playbutton);
+
 
         setLoopSize = add_knob(lw, "S",135,145,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
@@ -377,7 +417,7 @@ public:
         Volume->scale.gravity = SOUTHWEST;
         Volume->flags |= HAS_TOOLTIP;
         add_tooltip(Volume, "Volume (dB)");
-        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 6.0, 0.1, CL_CONTINUOS);
+        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 20.0, 0.1, CL_CONTINUOS);
         Volume->func.expose_callback = draw_knob;
         Volume->func.value_changed_callback = volume_callback;
         commonWidgetSettings(Volume);
@@ -389,22 +429,6 @@ public:
         add_tooltip(setLoop, "Use Loop Sample");
         setLoop->func.value_changed_callback = button_set_callback;
         commonWidgetSettings(setLoop);
-
-        clip = add_button(w, "", 325, 148, 35, 35);
-        clip->scale.gravity = SOUTHWEST;
-        widget_get_png(clip, LDVAR(clip__png));
-        clip->flags |= HAS_TOOLTIP;
-        add_tooltip(clip, "Clip Sample to clip marks");
-        clip->func.value_changed_callback = button_clip_callback;
-        commonWidgetSettings(clip);
-
-        playbutton = add_image_toggle_button(w, "", 360, 148, 35, 35);
-        playbutton->scale.gravity = SOUTHWEST;
-        widget_get_png(playbutton, LDVAR(play_png));
-        playbutton->flags |= HAS_TOOLTIP;
-        add_tooltip(playbutton, "Play Sample");
-        playbutton->func.value_changed_callback = button_playbutton_callback;
-        commonWidgetSettings(playbutton);
 
         #ifndef RUN_AS_CLAP_PLUGIN
         w_quit = add_button(lw, "", 390, 148, 35, 35);
@@ -456,6 +480,8 @@ private:
     Widget_t *Sustain;
     Widget_t *Release;
     Widget_t *Frequency;
+    Widget_t *Resonance;
+    Widget_t *CutOff;
 
     Window    p;
 
@@ -479,6 +505,8 @@ private:
     float sustain;
     float release;
     float frequency;
+    float resonance;
+    float cutoff;
     float volume;
     int useLoop;
 
@@ -535,14 +563,16 @@ private:
             } else {
                 loopPoint_l_auto = 0;
                 loopPoint_r_auto = 0;
-                Widget_t *dia = open_message_dialog(w, ERROR_BOX, "loopino",
-                                                    _("Fail to create loop"),NULL);
-                os_set_transient_for_hint(w, dia);
+                if (guiIsCreated) {
+                    Widget_t *dia = open_message_dialog(w, ERROR_BOX, "loopino",
+                                                        _("Fail to create loop"),NULL);
+                    os_set_transient_for_hint(w, dia);
+                }
                 return false;
             }
             return true;
         } else {
-            if (jack_sr && af.samples) {
+            if (jack_sr && af.samples && guiIsCreated) {
                 Widget_t *dia = open_message_dialog(w, ERROR_BOX, "loopino",
                                                     _("Fail to get root Frequency"),NULL);
                 os_set_transient_for_hint(w, dia);
@@ -1112,6 +1142,24 @@ private:
         self->synth.setRootFreq(self->frequency);
     }
 
+    // Resonance control
+    static void resonance_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->resonance = adj_get_value(w->adj);
+        self->markDirty(8);
+        self->synth.setReso((int)self->resonance);
+    }
+
+    // Cutoff control
+    static void cutoff_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->cutoff = adj_get_value(w->adj);
+        self->markDirty(9);
+        self->synth.setCutoff((int)self->cutoff);
+    }
+
     // volume control
     static void volume_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
@@ -1526,7 +1574,7 @@ private:
 
     // save menu callback
     void save() {
-        if (presetName.empty()) return;
+        if (presetName.empty()) saveAs();
         savePreset(getPathFor(presetName));
     }
 
@@ -1685,7 +1733,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 2; // guard for future proof
+        header.version = 3; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -1697,6 +1745,9 @@ private:
         writeControllerValue(out, Frequency);
         writeControllerValue(out, setLoop);
         writeControllerValue(out, setLoopSize);
+        // since version 3
+        writeControllerValue(out, Resonance);
+        writeControllerValue(out, CutOff);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -1718,7 +1769,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 2) {
+        if (header.version > 3) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -1730,6 +1781,10 @@ private:
         readControllerValue(in, Frequency);
         readControllerValue(in, setLoop);
         readControllerValue(in, setLoopSize);
+        if (header.version > 2) {
+            readControllerValue(in, Resonance);
+            readControllerValue(in, CutOff);
+        }
 
         readSampleBuffer(in, af.samples, af.samplesize);
         in.close();
