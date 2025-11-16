@@ -90,7 +90,6 @@ public:
 
     std::string filename;
     std::string lname;
-    std::string instrument_name;
 
     bool loadNew;
     bool loadLoopNew;
@@ -719,7 +718,6 @@ private:
         loadNew = true;
         if (af.samples) {
             std::filesystem::path p = file;
-            instrument_name = p.stem();
             adj_set_max_value(wview->adj, (float)af.samplesize);
             adj_set_state(loopMark_L->adj, 0.0);
             loopPoint_l = 0;
@@ -1790,7 +1788,7 @@ private:
         update_waveview(wview, af.samples, af.samplesize);
         loadPresetToSynth();
         std::filesystem::path p = filename;
-        presetName = p.stem();
+        presetName = p.stem().string();
         std::string tittle = "loopino: " + presetName;
         widget_set_title(w_top, tittle.data());
         return true;

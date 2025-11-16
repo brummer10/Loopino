@@ -20,6 +20,10 @@ else
   CXXFLAGS += -O2 -DNDEBUG
 endif
 
+ifneq ($(MAKECMDGOALS),clap)
+  USEAPI = jack
+endif
+
 	# check CPU and supported optimization flags
 	ifneq ($$(filter $(CPU_INFO) | grep sse3 ) , )
 		SSE_CFLAGS = -msse3 -mfpmath=sse
@@ -79,11 +83,11 @@ endif
 
 ifeq ($(TARGET), Linux)
 	# set compile flags
-	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile jack $(USEAPI) fftw3f`\
+	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f`\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections -Wl,--gc-sections \
 	-pthread $(SSE_CFLAGS)
 	CXXFLAGS += -MMD -std=c++20 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
-	LDFLAGS += -I. -lm -pthread -lpthread `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs jack sndfile $(USEAPI) fftw3f`
+	LDFLAGS += -I. -lm -pthread -lpthread `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f`
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
 	endif
@@ -93,13 +97,13 @@ else ifeq ($(TARGET), Windows)
 
 	CXXFLAGS += -MMD -std=c++20 -DALVER=\"$(VER)\" $(CFLAGS)
 
-	LDFLAGS += -I. -lm -pthread -lpthread  $(PAWPAW_LFLAGS) `$(PKGCONFIG) --cflags --libs jack sndfile fftw3f`
+	LDFLAGS += -I. -lm -pthread -lpthread  $(PAWPAW_LFLAGS) `$(PKGCONFIG) --cflags --libs $(USEAPI) sndfile fftw3f`
 
 	GUI_LDFLAGS += -I$(HEADER_DIR) -static-libgcc -static-libstdc++ \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo ` \
 	-L. $(LIB_DIR)libxputty.$(STATIC_LIB_EXT) -lm $(PAWPAW_LFLAGS)
 
-	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) --cflags jack sndfile fftw3f`\
+	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) --cflags $(USEAPI) sndfile fftw3f`\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections -Wl,--gc-sections \
 	-pthread $(SSE_CFLAGS)
 
