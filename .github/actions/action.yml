@@ -256,8 +256,6 @@ runs:
         echo t3
         ./PawPaw/bootstrap-jack2.sh ${{ env.PAWPAW_TARGET }}
         echo t4
-        ./PawPaw/build-jack2.sh ${{ env.PAWPAW_TARGET }}
-        echo t4
         ./PawPaw/.cleanup.sh ${{ env.PAWPAW_TARGET }}
         echo t5
 
