@@ -234,6 +234,7 @@ struct LadderFilter {
     double sampleRate = 44100.0;
     double feedback = 1.0;
     double tunning = 0.5;
+    bool filterOff = true;
 
     void setSampleRate(double sr) {sampleRate = sr;}
 
@@ -245,7 +246,7 @@ struct LadderFilter {
     }
 
     inline double process(double in) {
-
+        if (filterOff) return in;
         // Feedback from 4th stage
         in -= z4 * feedback;
         in = tanh_fast(in); // std::tanh
@@ -296,11 +297,15 @@ public:
     void setCutoff(int value) {
         value = std::clamp(value, 0, 127);
         ccCutoff = value;
+        if (ccCutoff == 127 && ccReso == 0) filter.filterOff = true;
+        else filter.filterOff = false;
     }
 
     void setReso(int value) {
         value = std::clamp(value, 0, 127);
         ccReso   = value;
+        if (ccCutoff == 127 && ccReso == 0) filter.filterOff = true;
+        else filter.filterOff = false;
     }
 
     void setKeyTracking(float amt) {
@@ -380,6 +385,7 @@ private:
     }
 
     void recalcFilter() {
+        if (filter.filterOff) return;
         // Base cutoff from CC74
         float baseCut = ccToFreq(ccCutoff);
 

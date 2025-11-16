@@ -426,6 +426,12 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
                     keys = (MidiKeyboard*)plug->r->keyboard->private_struct;
                 if ((ev->data[0] & 0xf0) == 0xc0) {  // program change on any midi channel
                     plug->r->loadPresetNum((int)(ev->data[1]));
+                } else if ((in_event.buffer[0] & 0xf0) == 0xb0) {   // controller
+                    if (in_event.buffer[1]== 71) {
+                        ui.synth.setReso((int)in_event.buffer[2]);
+                    } else if (in_event.buffer[1]== 74) {
+                        ui.synth.setCutoff((int)in_event.buffer[2]);
+                    }
                 } else if ((ev->data[0] & 0xf0) == 0x90) {   // Note On
                     int velocity = (int)ev->data[2];
                     if (velocity < 1) {
@@ -519,8 +525,9 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         }
         // process synth
         fRec0[0] = fSlow0 + 0.999 * fRec0[1];
-        left_output[i] += plug->r->synth.process() * fRec0[0];
-        right_output[i] += plug->r->synth.process() * fRec0[0];
+        float out = plug->r->synth.process() * fRec0[0];
+        left_output[i] += out;
+        right_output[i] += out;
         fRec0[1] = fRec0[0];
     }
 

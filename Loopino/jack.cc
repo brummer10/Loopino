@@ -64,6 +64,10 @@ void process_midi(void* midi_input_port_buf) {
             } else if ((in_event.buffer[1]== 32 ||
                         in_event.buffer[1]== 0)) { // bank change (LSB/MSB) on any midi channel
                 //fprintf(stderr,"bank changed %i", (int)in_event.buffer[2]);
+            } else if (in_event.buffer[1]== 71) {
+                ui.synth.setReso((int)in_event.buffer[2]);
+            } else if (in_event.buffer[1]== 74) {
+                ui.synth.setCutoff((int)in_event.buffer[2]);
             } else {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }
@@ -124,8 +128,9 @@ int jack_process(jack_nframes_t nframes, void *arg) {
     float fSlow0 = 0.0010000000000000009 * ui.gain;
     for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
         fRec1[0] = fSlow0 + 0.999 * fRec1[1];
-        output[i] += ui.synth.process() * fRec1[0];
-        output1[i] += ui.synth.process() * fRec1[0];
+        float out = ui.synth.process() * fRec1[0];
+        output[i] += out;
+        output1[i] += out;
         fRec1[1] = fRec1[0];
     }
 

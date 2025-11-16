@@ -448,6 +448,10 @@ public:
         //keyboard->scale.gravity = SOUTHCENTER;
         keyboard->parent_struct = (void*)this;
         MidiKeyboard* keys = (MidiKeyboard*)keyboard->private_struct;
+        Widget_t *view_port = keys->context_menu->childlist->childs[0];
+        Widget_t *octavemap = view_port->childlist->childs[1];
+        keys->octave = 12*3;
+        set_active_radio_entry_num(octavemap, keys->octave/12);
         keys->mk_send_note = get_note;
         keys->mk_send_all_sound_off = all_notes_off;
 
@@ -523,12 +527,6 @@ private:
         loopBuffer.clear();
         if (lg.getNextMatch(af.samples, af.samplesize , af.channels, 
             freq, loopBuffer, loopinfo, num)) {
-                loopFreq = 0.0;
-                loopPitchCorrection = 0;
-                loopRootkey = 0;
-                if (loopBuffer.size()) loopRootkey = pt.getPitch(loopBuffer.data(),
-                        loopBuffer.size(), 1, (float)jack_sr, &loopPitchCorrection, &loopFreq);
-
                 loopPoint_l_auto = loopinfo.start;
                 loopPoint_r_auto = loopinfo.end;
                 currentLoop = num;
@@ -552,13 +550,6 @@ private:
             loopBuffer.clear();
             if (lg.generateLoop(af.samples, loopPoint_l, loopPoint_r, af.samplesize ,
                                 af.channels, jack_sr, freq, loopBuffer, loopinfo, loopPeriods)) {
-        
-                loopFreq = 0.0;
-                loopPitchCorrection = 0;
-                loopRootkey = 0;
-                if (loopBuffer.size()) loopRootkey = pt.getPitch(loopBuffer.data(),
-                        loopBuffer.size(), 1, (float)jack_sr, &loopPitchCorrection, &loopFreq);
-
                 loopPoint_l_auto = loopinfo.start;
                 loopPoint_r_auto = loopinfo.end;
                 matches = loopinfo.matches;
@@ -616,7 +607,7 @@ private:
         lbank.clear();
         loopData.data = loopBuffer;
         loopData.sourceRate = (double)jack_sr;
-        loopData.rootFreq = (double)loopFreq;
+        loopData.rootFreq = (double)freq;
         lbank.addSample(loopData);
         synth.setLoopBank(&lbank);
         
