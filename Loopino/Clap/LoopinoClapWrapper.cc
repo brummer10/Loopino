@@ -42,7 +42,7 @@
             synth.setDecay(decay);
             synth.setSustain(sustain);
             synth.setRelease(release);
-            synth.setRootFreq(freq);
+            synth.setRootFreq(frequency);
             synth.setLoop(useLoop);
             gain = std::pow(1e+01, 0.05 * volume);
             synth.setReso(resonance);

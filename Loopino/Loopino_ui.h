@@ -343,7 +343,7 @@ public:
         set_adjustment(Frequency->adj, 440.0, 440.0, 370.0, 453.0, 0.1, CL_CONTINUOS);
         Frequency->scale.gravity = SOUTHWEST;
         Frequency->flags |= HAS_TOOLTIP;
-        add_tooltip(Frequency, "Snyth Root Freqency");
+        add_tooltip(Frequency, "Synth Root Frequency");
         Frequency->func.value_changed_callback = frequency_callback;
         commonWidgetSettings(Frequency);
 
