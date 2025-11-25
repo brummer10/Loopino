@@ -348,6 +348,19 @@ public:
         return filter.process(out);
     }
 
+    void getAnalyseBuffer(float *abuf, int frames,
+                        const std::vector<float>* sampleData,
+                        double sourceRate, double rootFreq) {
+
+        player.setSample(sampleData, sourceRate);
+        player.setFrequency(440.0, rootFreq);
+        player.setLoop(0, sampleData->size() - 1, true);
+        player.reset();
+        for (int i = 0; i < frames; i++) {
+            abuf[i] = player.process();
+        }
+    }
+
     bool isActive() const { return active; }
 
 private:
@@ -358,7 +371,7 @@ private:
     bool active = false;
     bool looping = true;
     float vel = 1.0f;
-    float freq = 440.0;
+    float freq = 440.0f;
     int midiNote = -1;
 
     int ccCutoff = 127;
@@ -381,7 +394,7 @@ private:
     }
 
     inline double midiToFreq(int midiNote) {
-        return freq * std::pow(2.0, (midiNote - 69) / 12.0);
+        return  freq * std::pow(2.0, (midiNote - 69) / 12.0);
     }
 
     void recalcFilter() {
@@ -434,6 +447,11 @@ public:
     void setLoopBank(const SampleBank* lbank) {loopBank = lbank;}
 
     void setBank(const SampleBank* sbank) {sampleBank = sbank;}
+
+    void getAnalyseBuffer(float *abuf, int frames) {
+        const auto s = loopBank->getSample(0);
+        voices[voices.size() - 1].getAnalyseBuffer(abuf, frames, &s->data, s->sourceRate, s->rootFreq);
+    }
 
     void setAttack(float a) {
         for (auto& v : voices) {

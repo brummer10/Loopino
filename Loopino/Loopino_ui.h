@@ -137,6 +137,7 @@ public:
         useLoop = 0;
         generateKeys();
         guiIsCreated = false;
+        analyseBuffer = new float[40960];
         #if defined (RUN_AS_CLAP_PLUGIN)
         registerParameters();
         #endif
@@ -144,6 +145,7 @@ public:
 
     ~Loopino() {
         pa.stop();
+        delete[] analyseBuffer;
     };
 
 /****************************************************************
@@ -340,7 +342,7 @@ public:
         commonWidgetSettings(Release);
 
         Frequency = add_valuedisplay(w, _(" Hz"), 220, 150, 60, 30);
-        set_adjustment(Frequency->adj, 440.0, 440.0, 370.0, 453.0, 0.1, CL_CONTINUOS);
+        set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
         Frequency->scale.gravity = SOUTHWEST;
         Frequency->flags |= HAS_TOOLTIP;
         add_tooltip(Frequency, "Synth Root Frequency");
@@ -407,10 +409,11 @@ public:
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
         commonWidgetSettings(setNextLoop);
 
-        Presets = add_button(lw, "Presets", 20, 150, 80, 30);
+        Presets = add_button(lw, "", 20, 150, 35, 35);
         Presets->scale.gravity = SOUTHWEST;
+        widget_get_png(Presets, LDVAR(presets_png));
         Presets->flags |= HAS_TOOLTIP;
-        add_tooltip(Presets, "Load next loop");
+        add_tooltip(Presets, "Load/Save Presets");
         Presets->func.value_changed_callback = presets_callback;
         commonWidgetSettings(Presets);
 
@@ -515,6 +518,8 @@ private:
     float cutoff;
     float volume;
     int useLoop;
+    
+    float *analyseBuffer;
 
 /****************************************************************
                     Create loop samples
@@ -609,7 +614,17 @@ private:
         loopData.rootFreq = (double)freq;
         lbank.addSample(loopData);
         synth.setLoopBank(&lbank);
-        
+        memset(analyseBuffer, 0, 40960 * sizeof(float));
+        synth.getAnalyseBuffer(analyseBuffer, 40960);
+        loopRootkey = pt.getPitch(analyseBuffer,
+                        40960, 1, (float)jack_sr, &loopPitchCorrection, &loopFreq);
+        double cor = loopFreq / 440.0f;
+        lbank.clear();
+        loopData.data = loopBuffer;
+        loopData.sourceRate = (double)jack_sr;
+        loopData.rootFreq = (double)(freq * cor);
+        lbank.addSample(loopData);
+        synth.setLoopBank(&lbank);
     }
 
     void setBank() {

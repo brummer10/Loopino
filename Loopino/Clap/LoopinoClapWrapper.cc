@@ -17,7 +17,7 @@
         param.registerParam("Decay",      "ADSR", 0.005, 5.0, 0.1, 0.01,  (void*)&decay,       false,  IS_FLOAT);
         param.registerParam("Sustain",    "ADSR", 0.001, 1.0, 0.8, 0.01,  (void*)&sustain,     false,  IS_FLOAT);
         param.registerParam("Release",    "ADSR", 0.005, 10.0, 0.3, 0.01, (void*)&release,     false,  IS_FLOAT);
-        param.registerParam("Frequency", "Synth",370.0, 453.0, 440.0, 0.1,(void*)&frequency,   false,  IS_FLOAT);
+        param.registerParam("Frequency", "Synth",220.0, 880.0, 440.0, 0.1,(void*)&frequency,   false,  IS_FLOAT);
         param.registerParam("Volume",    "Synth", -20.0, 6.0, 0.0, 0.1,   (void*)&volume,      false,  IS_FLOAT);
         param.registerParam("Use Loop",  "Synth", 0, 1, 0, 1,             (void*)&useLoop,     true,   IS_INT);
         param.registerParam("Loop Size", "Synth", 1, 12, 1, 1,            (void*)&loopPeriods, true,   IS_INT);

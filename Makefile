@@ -57,6 +57,7 @@ clean:
 	@rm -f ./libxputty/xputty/resources/okay.png
 	@rm -f ./libxputty/xputty/resources/plus.png
 	@rm -f ./libxputty/xputty/resources/loopino.png
+	@rm -f ./libxputty/xputty/resources/presets.png
 
 
 features:
