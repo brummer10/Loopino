@@ -23,6 +23,7 @@
         param.registerParam("Loop Size", "Synth", 1, 12, 1, 1,            (void*)&loopPeriods, true,   IS_INT);
         param.registerParam("Resonance", "Synth", 0.0, 127.0, 0.0, 1.0,   (void*)&resonance,   true,   IS_FLOAT);
         param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 127.0, 1.0, (void*)&cutoff,      true,   IS_FLOAT);
+        param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       true,   IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -37,6 +38,7 @@
             adj_set_value(setLoopSize->adj, (float)loopPeriods);
             adj_set_value(Resonance->adj, resonance);
             adj_set_value(CutOff->adj, cutoff);
+            adj_set_value(Sharp->adj, sharp);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -180,7 +182,7 @@
     void saveState(T* out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 3; // guard for future proof
+        header.version = 4; // guard for future proof
         header.dataSize = af.samplesize;
         out->write(out, &header, sizeof(header));
 
@@ -195,6 +197,8 @@
         // since version 3
         out->write(out, &resonance, sizeof(resonance));
         out->write(out, &cutoff, sizeof(cutoff));
+        // since version 4
+        out->write(out, &sharp, sizeof(sharp));
 
         writeSamples(out, af.samples, af.samplesize);
     }
@@ -228,7 +232,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 3) {
+        if (header.version > 4) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -244,6 +248,9 @@
         if (header.version > 2) {
             in->read(in, &resonance, sizeof(resonance));
             in->read(in, &cutoff, sizeof(cutoff));
+        }
+        if (header.version > 3) {
+            in->read(in, &sharp, sizeof(sharp));
         }
 
         readSamples(in, af.samples, af.samplesize);

@@ -60,7 +60,9 @@ public:
     Params param;
     
     std::vector<float> loopBuffer;
+    std::vector<float> loopBufferSave;
     std::vector<float> sampleBuffer;
+    std::vector<float> sampleBufferSave;
 
     SampleBank sbank;
     SampleInfo sampleData;
@@ -134,6 +136,7 @@ public:
         resonance = 0.0;
         cutoff = 127.0;
         volume = 0.0f;
+        sharp = 0.0f;
         useLoop = 0;
         generateKeys();
         guiIsCreated = false;
@@ -197,7 +200,8 @@ public:
         af.channels = 1;
         loopPoint_l = 0;
         loopPoint_r = af.samplesize;
-        setOneShootBank();
+        setOneShootToBank();
+        process_sample_sharp();
         if (createLoop()) {
             setLoopToBank();
         } 
@@ -386,6 +390,24 @@ public:
         commonWidgetSettings(playbutton);
 
 
+        Presets = add_button(lw, "", 20, 150, 35, 35);
+        Presets->scale.gravity = SOUTHWEST;
+        widget_get_png(Presets, LDVAR(presets_png));
+        Presets->flags |= HAS_TOOLTIP;
+        add_tooltip(Presets, "Load/Save Presets");
+        Presets->func.value_changed_callback = presets_callback;
+        commonWidgetSettings(Presets);
+
+        Sharp = add_knob(lw, "Sharp",60,145,38,38);
+        Sharp->scale.gravity = SOUTHWEST;
+        Sharp->flags |= HAS_TOOLTIP;
+        add_tooltip(Sharp, "Sharp");
+        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_LOGSCALE);
+        set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
+        Sharp->func.expose_callback = draw_knob;
+        Sharp->func.value_changed_callback = sharp_callback;
+        commonWidgetSettings(Sharp);
+
         setLoopSize = add_knob(lw, "S",135,145,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
         setLoopSize->flags |= HAS_TOOLTIP;
@@ -408,14 +430,6 @@ public:
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
         commonWidgetSettings(setNextLoop);
-
-        Presets = add_button(lw, "", 20, 150, 35, 35);
-        Presets->scale.gravity = SOUTHWEST;
-        widget_get_png(Presets, LDVAR(presets_png));
-        Presets->flags |= HAS_TOOLTIP;
-        add_tooltip(Presets, "Load/Save Presets");
-        Presets->func.value_changed_callback = presets_callback;
-        commonWidgetSettings(Presets);
 
         Volume = add_knob(lw, "dB",255,145,38,38);
         Volume->scale.gravity = SOUTHWEST;
@@ -491,6 +505,7 @@ private:
     Widget_t *Frequency;
     Widget_t *Resonance;
     Widget_t *CutOff;
+    Widget_t *Sharp;
 
     Window    p;
 
@@ -517,6 +532,7 @@ private:
     float resonance;
     float cutoff;
     float volume;
+    float sharp;
     int useLoop;
     
     float *analyseBuffer;
@@ -533,6 +549,23 @@ private:
             freq, loopBuffer, loopinfo, num)) {
                 loopPoint_l_auto = loopinfo.start;
                 loopPoint_r_auto = loopinfo.end;
+                // get max abs amplitude for normalisation
+                float maxAbs = 0.0f;
+                for (size_t i = 0; i < loopBuffer.size(); ++i) {
+                    float a = std::fabs(loopBuffer[i]);
+                    if (a > maxAbs) maxAbs = a;
+                }
+                // normalise loop buffer
+                float gain = 0.6f/maxAbs;
+                for (size_t i = 0; i < loopBuffer.size(); ++i) {
+                    loopBuffer[i] *=gain;
+                }
+                loopBufferSave.clear();
+                loopBufferSave.resize(loopBuffer.size());
+                for (size_t i = 0; i < loopBuffer.size(); ++i) {
+                    loopBufferSave[i] = loopBuffer[i];
+                }
+                process_sharp();
                 currentLoop = num;
                 return true;
             }
@@ -543,7 +576,6 @@ private:
         freq = 0.0;
         pitchCorrection = 0;
         rootkey = 0;
-        matches = 0;
         if (af.samples) rootkey = pt.getPitch(af.samples, af.samplesize , af.channels, (float)jack_sr, &pitchCorrection, &freq);
     }
 
@@ -558,6 +590,23 @@ private:
                 loopPoint_r_auto = loopinfo.end;
                 matches = loopinfo.matches;
                 currentLoop = matches - 1;
+                // get max abs amplitude for normalisation
+                float maxAbs = 0.0f;
+                for (size_t i = 0; i < loopBuffer.size(); ++i) {
+                    float a = std::fabs(loopBuffer[i]);
+                    if (a > maxAbs) maxAbs = a;
+                }
+                // normalise loop buffer
+                float gain = 0.6f/maxAbs;
+                for (size_t i = 0; i < loopBuffer.size(); ++i) {
+                    loopBuffer[i] *=gain;
+                }
+                loopBufferSave.clear();
+                loopBufferSave.resize(loopBuffer.size());
+                for (size_t i = 0; i < loopBuffer.size(); ++i) {
+                    loopBufferSave[i] = loopBuffer[i];
+                }
+                process_sharp();
             } else {
                 loopPoint_l_auto = 0;
                 loopPoint_r_auto = 0;
@@ -581,29 +630,94 @@ private:
     }
 
 /****************************************************************
+                   offline processor (sharp)
+****************************************************************/
+
+    void process_sharp(){
+        if (!loopBuffer.size()) return;
+        if (sharp < 0.001) return;
+        for (size_t i = 0; i < loopBuffer.size(); ++i) {
+            loopBuffer[i] = loopBufferSave[i];
+        }
+        float drive = 1.0f + sharp * 25.0f;
+        float compDB = sharp * 6.0f;
+        float compensation = std::pow(10.0f, compDB / 20.0f);
+        for (size_t i = 0; i < loopBuffer.size(); ++i) {
+            float x = loopBuffer.data()[i];
+            float shaped = std::tanh(x * drive);
+
+            loopBuffer.data()[i] = (x + sharp * (shaped - x)) * compensation;
+        }
+    }
+
+    void process_sample_sharp(){
+        if (!sampleBuffer.size()) return;
+        if (sharp < 0.001) return;
+        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
+            sampleBuffer[i] = sampleBufferSave[i];
+        }
+        float drive = 1.0f + sharp * 25.0f;
+        float compDB = sharp * 6.0f;
+        float compensation = std::pow(10.0f, compDB / 20.0f);
+        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
+            float x = sampleBuffer.data()[i];
+            float shaped = std::tanh(x * drive);
+            sampleBuffer.data()[i] = (x + sharp * (shaped - x)) * compensation;
+        }
+
+        // get max abs amplitude for normalisation
+        float maxAbs = 0.0f;
+        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
+            float a = std::fabs(sampleBuffer[i]);
+            if (a > maxAbs) maxAbs = a;
+        }
+        // normalise loop buffer
+        float gain = 0.6f/maxAbs;
+        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
+            sampleBuffer[i] *=gain;
+        }
+
+        if (guiIsCreated) {
+            loadNew = true;
+            update_waveview(wview, sampleBuffer.data(), sampleBuffer.size());
+        }
+        setOneShootBank();
+    }
+
+/****************************************************************
                     Load samples into synth
 ****************************************************************/
 
     void setOneShootBank() {
-        if (!af.samples) return;
+        if (!sampleBuffer.size()) return;
         getPitch();
         sbank.clear();
-        sampleBuffer.clear();
-        sampleBuffer.resize(af.samplesize);
-        float maxAbs = 0.0f;
-        for (uint32_t i = 0; i < af.samplesize; i++) {
-            float a = std::fabs(af.samples[i * af.channels]);
-            if (a > maxAbs) maxAbs = a;
-        }
-        float gain = 1.0f/maxAbs;
-        for (uint32_t i = 0; i < af.samplesize; i++) {
-            sampleBuffer[i] = af.samples[i * af.channels] * gain;
-        }
         sampleData.data = sampleBuffer;
         sampleData.sourceRate = (double)jack_sr;
         sampleData.rootFreq = (double) freq;
         sbank.addSample(sampleData);
         synth.setBank(&sbank);
+    }
+
+    void setOneShootToBank() {
+        if (!af.samples) return;
+        sampleBuffer.clear();
+        sampleBuffer.resize(af.samplesize);
+        float maxAbs = 0.0f;
+        for (size_t i = 0; i < af.samplesize; i++) {
+            float a = std::fabs(af.samples[i * af.channels]);
+            if (a > maxAbs) maxAbs = a;
+        }
+        float gain = 1.0f/maxAbs;
+        for (size_t i = 0; i < af.samplesize; i++) {
+            sampleBuffer[i] = af.samples[i * af.channels] * gain;
+        }
+        sampleBufferSave.clear();
+        sampleBufferSave.resize(sampleBuffer.size());
+        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
+            sampleBufferSave[i] = sampleBuffer[i];
+        }
+        setOneShootBank();
     }
 
     void setLoopBank() {
@@ -676,6 +790,7 @@ private:
         for (uint32_t i = 0; i<new_size; i++) {
             af.saveBuffer[i] = af.samples[i+loopPoint_l];
         }
+        matches = 0;
         delete[] af.samples;
         af.samples = nullptr;
         af.samples =  new float[new_size];
@@ -697,7 +812,8 @@ private:
         if (adj_get_value(playbutton->adj))
              play = true;
         ready = true;
-        setOneShootBank();
+        setOneShootToBank();
+        process_sample_sharp();
         button_setLoop_callback(setLoop, NULL);
     }
 
@@ -721,6 +837,7 @@ private:
 
         ready = false;
         play_loop = false;
+        matches = 0;
         adj_set_value(setLoop->adj, 0.0);
         is_loaded = af.getAudioFile(file, jack_sr);
         if (!is_loaded) failToLoad();
@@ -740,7 +857,8 @@ private:
             loopPoint_r = af.samplesize;
             loadLoopNew = true;
             update_waveview(wview, af.samples, af.samplesize);
-            setOneShootBank();
+            setOneShootToBank();
+            process_sample_sharp();
             button_setLoop_callback(setLoop, NULL);
         } else {
             af.samplesize = 0;
@@ -1174,6 +1292,16 @@ private:
         self->volume = adj_get_value(w->adj);
         self->markDirty(5);
         self->gain = std::pow(1e+01, 0.05 * self->volume);
+    }
+
+    // sharp control
+    static void sharp_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->sharp = adj_get_value(w->adj);
+        self->process_sharp();
+        self->process_sample_sharp();
+        self->setLoopToBank();
     }
 
 /****************************************************************
@@ -1740,7 +1868,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 3; // guard for future proof
+        header.version = 4; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -1755,6 +1883,8 @@ private:
         // since version 3
         writeControllerValue(out, Resonance);
         writeControllerValue(out, CutOff);
+        // since version 4
+         writeControllerValue(out, Sharp);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -1776,7 +1906,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 3) {
+        if (header.version > 4) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -1791,6 +1921,9 @@ private:
         if (header.version > 2) {
             readControllerValue(in, Resonance);
             readControllerValue(in, CutOff);
+        }
+        if (header.version > 3) {
+            readControllerValue(in, Sharp);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);
