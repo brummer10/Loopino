@@ -402,7 +402,7 @@ public:
         Sharp->scale.gravity = SOUTHWEST;
         Sharp->flags |= HAS_TOOLTIP;
         add_tooltip(Sharp, "Sharp");
-        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_LOGSCALE);
+        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
         Sharp->func.expose_callback = draw_knob;
         Sharp->func.value_changed_callback = sharp_callback;
@@ -748,6 +748,7 @@ private:
     }
 
     void setLoopToBank() {
+        if (!loopBuffer.size()) return;
         // get max abs amplitude for normalisation
         float maxAbs = 0.0f;
         for (size_t i = 0; i < loopBuffer.size(); ++i) {
