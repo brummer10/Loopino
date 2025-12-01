@@ -966,7 +966,11 @@ private:
         loopPoint_l = 0;
         loopPoint_r = af.samplesize;
         setOneShootToBank();
-        button_setLoop_callback(setLoop, NULL);
+        if (guiIsCreated) button_setLoop_callback(setLoop, NULL);
+        else {
+            createLoop();
+            setLoopToBank();
+        }
     }
 
 /****************************************************************

@@ -24,6 +24,7 @@
         param.registerParam("Resonance", "Synth", 0.0, 127.0, 0.0, 1.0,   (void*)&resonance,   true,   IS_FLOAT);
         param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 127.0, 1.0, (void*)&cutoff,      true,   IS_FLOAT);
         param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       true,   IS_FLOAT);
+        param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         true,   IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -120,14 +121,14 @@
         }
         #else
         XWindowAttributes attrs;
-        if (XGetWindowAttributes(ui->main.dpy, p, &attrs)) {
+        if (XGetWindowAttributes(app.dpy, p, &attrs)) {
             host_width  = attrs.width;
             host_height = attrs.height;
         }
         #endif
         if ((host_width != width && host_width != 1) ||
             (host_height != height && host_height != 1)) {
-            os_resize_window(ui->main.dpy, w_top, host_width, host_height);
+            os_resize_window(app.dpy, w_top, host_width, host_height);
         }
         #endif
     }
