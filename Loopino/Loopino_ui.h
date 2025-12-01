@@ -99,6 +99,7 @@ public:
     bool play_loop;
     bool ready;
     bool havePresetToLoad;
+    bool haveDefault;
 
     Loopino() : af() {
         jack_sr = 0;
@@ -116,6 +117,7 @@ public:
         play_loop = false;
         ready = true;
         havePresetToLoad = false;
+        haveDefault = true;
         matches = 0;
         currentLoop = 0;
         loopPeriods = 1;
@@ -124,7 +126,7 @@ public:
         rootkey = 60;
         loopFreq = 0.0;
         loopPitchCorrection = 0;
-        loopRootkey = 60;
+        loopRootkey = 69;
         loadPresetMIDI = -1;
         p = 0;
         firstLoop = true;
@@ -137,6 +139,7 @@ public:
         cutoff = 127.0;
         volume = 0.0f;
         sharp = 0.0f;
+        saw = 0.0f;
         useLoop = 0;
         generateKeys();
         guiIsCreated = false;
@@ -171,6 +174,7 @@ public:
     void setJackSampleRate(uint32_t sr) {
         jack_sr = sr;        
         synth.init((double)jack_sr, 48);
+        generateSine();
         //loadPreset(presetFile);
     }
 
@@ -201,7 +205,6 @@ public:
         loopPoint_l = 0;
         loopPoint_r = af.samplesize;
         setOneShootToBank();
-        process_sample_sharp();
         if (createLoop()) {
             setLoopToBank();
         } 
@@ -401,14 +404,24 @@ public:
         Sharp = add_knob(lw, "Sharp",60,145,38,38);
         Sharp->scale.gravity = SOUTHWEST;
         Sharp->flags |= HAS_TOOLTIP;
-        add_tooltip(Sharp, "Sharp");
+        add_tooltip(Sharp, "Square");
         set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
         Sharp->func.expose_callback = draw_knob;
         Sharp->func.value_changed_callback = sharp_callback;
         commonWidgetSettings(Sharp);
 
-        setLoopSize = add_knob(lw, "S",135,145,38,38);
+        Saw = add_knob(lw, "Saw",100,145,38,38);
+        Saw->scale.gravity = SOUTHWEST;
+        Saw->flags |= HAS_TOOLTIP;
+        add_tooltip(Saw, "Saw Tooth");
+        set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
+        Saw->func.expose_callback = draw_knob;
+        Saw->func.value_changed_callback = saw_callback;
+        commonWidgetSettings(Saw);
+
+        setLoopSize = add_knob(lw, "S",140,145,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
         setLoopSize->flags |= HAS_TOOLTIP;
         add_tooltip(setLoopSize, "Loop Periods");
@@ -506,6 +519,7 @@ private:
     Widget_t *Resonance;
     Widget_t *CutOff;
     Widget_t *Sharp;
+    Widget_t *Saw;
 
     Window    p;
 
@@ -533,6 +547,7 @@ private:
     float cutoff;
     float volume;
     float sharp;
+    float saw;
     int useLoop;
     
     float *analyseBuffer;
@@ -540,6 +555,20 @@ private:
 /****************************************************************
                     Create loop samples
 ****************************************************************/
+
+    void normalize(std::vector<float>& Buffer, const float range){
+        // get max abs amplitude for normalisation
+        float maxAbs = 0.0f;
+        for (size_t i = 0; i < Buffer.size(); ++i) {
+            float a = std::fabs(Buffer[i]);
+            if (a > maxAbs) maxAbs = a;
+        }
+        // normalise buffer
+        float gain = range / maxAbs;
+        for (size_t i = 0; i < Buffer.size(); ++i) {
+            Buffer[i] *=gain;
+        }
+    }
 
     bool getNextLoop(int num) {
         if (num < 0 || num >= matches) return false;
@@ -549,17 +578,7 @@ private:
             freq, loopBuffer, loopinfo, num)) {
                 loopPoint_l_auto = loopinfo.start;
                 loopPoint_r_auto = loopinfo.end;
-                // get max abs amplitude for normalisation
-                float maxAbs = 0.0f;
-                for (size_t i = 0; i < loopBuffer.size(); ++i) {
-                    float a = std::fabs(loopBuffer[i]);
-                    if (a > maxAbs) maxAbs = a;
-                }
-                // normalise loop buffer
-                float gain = 0.6f/maxAbs;
-                for (size_t i = 0; i < loopBuffer.size(); ++i) {
-                    loopBuffer[i] *=gain;
-                }
+                normalize(loopBuffer, 0.6f);
                 loopBufferSave.clear();
                 loopBufferSave.resize(loopBuffer.size());
                 for (size_t i = 0; i < loopBuffer.size(); ++i) {
@@ -577,6 +596,10 @@ private:
         pitchCorrection = 0;
         rootkey = 0;
         if (af.samples) rootkey = pt.getPitch(af.samples, af.samplesize , af.channels, (float)jack_sr, &pitchCorrection, &freq);
+        if (haveDefault) {
+            freq = 440.0f;
+            rootkey = 69;
+        }
     }
 
     bool createLoop() {
@@ -590,17 +613,7 @@ private:
                 loopPoint_r_auto = loopinfo.end;
                 matches = loopinfo.matches;
                 currentLoop = matches - 1;
-                // get max abs amplitude for normalisation
-                float maxAbs = 0.0f;
-                for (size_t i = 0; i < loopBuffer.size(); ++i) {
-                    float a = std::fabs(loopBuffer[i]);
-                    if (a > maxAbs) maxAbs = a;
-                }
-                // normalise loop buffer
-                float gain = 0.6f/maxAbs;
-                for (size_t i = 0; i < loopBuffer.size(); ++i) {
-                    loopBuffer[i] *=gain;
-                }
+                normalize(loopBuffer, 0.6f);
                 loopBufferSave.clear();
                 loopBufferSave.resize(loopBuffer.size());
                 for (size_t i = 0; i < loopBuffer.size(); ++i) {
@@ -630,58 +643,111 @@ private:
     }
 
 /****************************************************************
-                   offline processor (sharp)
+        offline processor (sharp (square) and saw tooth)
 ****************************************************************/
+
+    void process_saw(std::vector<float>& buffer) {
+        if (buffer.empty()) return;
+        if (saw <= 0.0001f) return;
+
+        const size_t N = buffer.size();
+        float* out = buffer.data();
+        const float snapAmount = saw;
+        const float snapTime = 0.003f * snapAmount;
+        size_t start = 0;
+
+        while (start < N - 1) {
+            while (start < N - 1 && out[start] == 0.0f)
+                start++;
+            if (start >= N - 1) break;
+            float sgn = (out[start] >= 0.0f ? 1.0f : -1.0f);
+            size_t end = start + 1;
+
+            while (end < N && (out[end] * sgn) >= 0.0f)
+                end++;
+
+            size_t len = end - start;
+            if (len < 3) { start = end; continue; }
+            float mn = out[start];
+            float mx = out[start];
+
+            for (size_t i = start; i < end; ++i) {
+                mn = min(mn, out[i]);
+                mx = max(mx, out[i]);
+            }
+
+            for (size_t i = 0; i < len; ++i)
+            {
+                float t = float(i) / float(len - 1);
+                float linear;
+                if (sgn > 0.0f) linear = mn + t * (mx - mn);
+                else linear = mx + t * (mn - mx);
+
+                out[start + i] = (1.0f - saw) * out[start + i] + saw * linear;
+            }
+
+            size_t snapSamples = size_t(snapTime * float(len));
+            if (snapSamples < 1) snapSamples = 1;
+            if (snapSamples > len / 3) snapSamples = len / 3;
+            float alpha = 0.25f + saw * 0.35f;
+            float beta  = 1.20f + saw * 0.50f;
+
+            for (size_t i = 0; i < snapSamples; ++i) {
+                float t = float(i) / float(snapSamples - 1);
+                float snapEnv = std::pow(t, alpha) * std::pow(1.0f - t, beta);
+                size_t idx = end - 1 - i;
+                float snapTarget = (sgn > 0.0f ? mn : mx);
+
+                out[idx] = out[idx] * (1.0f - snapEnv) + snapTarget * snapEnv;
+            }
+            start = end;
+        }
+    }
 
     void process_sharp(){
         if (!loopBuffer.size()) return;
-        if (sharp < 0.001) return;
+
         for (size_t i = 0; i < loopBuffer.size(); ++i) {
             loopBuffer[i] = loopBufferSave[i];
         }
+
         float drive = 1.0f + sharp * 25.0f;
         float compDB = sharp * 6.0f;
         float compensation = std::pow(10.0f, compDB / 20.0f);
+
         for (size_t i = 0; i < loopBuffer.size(); ++i) {
             float x = loopBuffer.data()[i];
             float shaped = std::tanh(x * drive);
 
             loopBuffer.data()[i] = (x + sharp * (shaped - x)) * compensation;
         }
+        process_saw(loopBuffer);
     }
 
-    void process_sample_sharp(){
+    void process_sample_sharp() {
         if (!sampleBuffer.size()) return;
-        if (sharp < 0.001) return;
-        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
+
+        for (size_t i = 0; i < sampleBuffer.size(); ++i)
             sampleBuffer[i] = sampleBufferSave[i];
-        }
+
         float drive = 1.0f + sharp * 25.0f;
         float compDB = sharp * 6.0f;
         float compensation = std::pow(10.0f, compDB / 20.0f);
+
         for (size_t i = 0; i < sampleBuffer.size(); ++i) {
-            float x = sampleBuffer.data()[i];
+            float x = sampleBuffer[i];
             float shaped = std::tanh(x * drive);
-            sampleBuffer.data()[i] = (x + sharp * (shaped - x)) * compensation;
+
+            sampleBuffer[i] =  (x + sharp * (shaped - x)) * compensation;
         }
 
-        // get max abs amplitude for normalisation
-        float maxAbs = 0.0f;
-        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
-            float a = std::fabs(sampleBuffer[i]);
-            if (a > maxAbs) maxAbs = a;
-        }
-        // normalise loop buffer
-        float gain = 0.6f/maxAbs;
-        for (size_t i = 0; i < sampleBuffer.size(); ++i) {
-            sampleBuffer[i] *=gain;
-        }
+        process_saw(sampleBuffer);
+        normalize(sampleBuffer, 0.6f);
 
         if (guiIsCreated) {
             loadNew = true;
             update_waveview(wview, sampleBuffer.data(), sampleBuffer.size());
         }
-        setOneShootBank();
     }
 
 /****************************************************************
@@ -717,6 +783,7 @@ private:
         for (size_t i = 0; i < sampleBuffer.size(); ++i) {
             sampleBufferSave[i] = sampleBuffer[i];
         }
+        process_sample_sharp();
         setOneShootBank();
     }
 
@@ -732,6 +799,10 @@ private:
         synth.getAnalyseBuffer(analyseBuffer, 40960);
         loopRootkey = pt.getPitch(analyseBuffer,
                         40960, 1, (float)jack_sr, &loopPitchCorrection, &loopFreq);
+        if (haveDefault) {
+            loopFreq = 440.0f;
+            loopRootkey = 69;
+        }
         double cor = loopFreq / 440.0f;
         lbank.clear();
         loopData.data = loopBuffer;
@@ -749,17 +820,7 @@ private:
 
     void setLoopToBank() {
         if (!loopBuffer.size()) return;
-        // get max abs amplitude for normalisation
-        float maxAbs = 0.0f;
-        for (size_t i = 0; i < loopBuffer.size(); ++i) {
-            float a = std::fabs(loopBuffer[i]);
-            if (a > maxAbs) maxAbs = a;
-        }
-        // normalise loop buffer
-        float gain = 0.6f/maxAbs;
-        for (size_t i = 0; i < loopBuffer.size(); ++i) {
-            loopBuffer[i] *=gain;
-        }
+        normalize(loopBuffer, 0.6f);
         loadLoopNew = true;
         play_loop = true;
         if (guiIsCreated) {
@@ -783,6 +844,7 @@ private:
         if (!af.samples) return;
         play = false;
         ready = false;
+        haveDefault = false;
         uint32_t new_size = (loopPoint_r-loopPoint_l) * af.channels;
         delete[] af.saveBuffer;
         af.saveBuffer = nullptr;
@@ -808,13 +870,12 @@ private:
 
         delete[] af.saveBuffer;
         af.saveBuffer = nullptr;
-        loadNew = true;
-        update_waveview(wview, af.samples, af.samplesize);
+        //loadNew = true;
+        //update_waveview(wview, af.samples, af.samplesize);
         if (adj_get_value(playbutton->adj))
              play = true;
         ready = true;
         setOneShootToBank();
-        process_sample_sharp();
         button_setLoop_callback(setLoop, NULL);
     }
 
@@ -824,9 +885,11 @@ private:
 
     // when Sound File loading fail, clear wave view and reset tittle
     void failToLoad() {
-        loadNew = true;
-        update_waveview(wview, af.samples, af.samplesize);
-        widget_set_title(w_top, "loopino");
+        if (guiIsCreated) {
+            loadNew = true;
+            update_waveview(wview, af.samples, af.samplesize);
+            widget_set_title(w_top, "loopino");
+        }
     }
 
     // load a Sound File when pre-load is the wrong file
@@ -849,17 +912,19 @@ private:
         load_soundfile(file);
         is_loaded = false;
         loadNew = true;
+        haveDefault = false;
         if (af.samples) {
             std::filesystem::path p = file;
-            adj_set_max_value(wview->adj, (float)af.samplesize);
-            adj_set_state(loopMark_L->adj, 0.0);
+            if (guiIsCreated) {
+                adj_set_max_value(wview->adj, (float)af.samplesize);
+                adj_set_state(loopMark_L->adj, 0.0);
+                adj_set_state(loopMark_R->adj,1.0);
+            }
             loopPoint_l = 0;
-            adj_set_state(loopMark_R->adj,1.0);
             loopPoint_r = af.samplesize;
-            loadLoopNew = true;
-            update_waveview(wview, af.samples, af.samplesize);
+            //loadLoopNew = true;
+            //update_waveview(wview, af.samples, af.samplesize);
             setOneShootToBank();
-            process_sample_sharp();
             button_setLoop_callback(setLoop, NULL);
         } else {
             af.samplesize = 0;
@@ -867,6 +932,41 @@ private:
             failToLoad();
         }
         ready = true;
+    }
+
+    void generateSine() {
+        haveDefault = true;
+        int new_size = static_cast<int>(4.0 * jack_sr);
+        delete[] af.samples;
+        af.samples = nullptr;
+        af.samples =  new float[new_size];
+        af.samplesize = new_size;
+        af.channels = 1;
+        std::memset(af.samples, 0, new_size * sizeof(float));
+        const float duration = new_size / jack_sr / 2;
+        for (int i = 0; i < new_size; ++i) {
+            float t = (float)i / jack_sr;
+            float s = sinf(2.0f * M_PI * 440.0f * t);
+            //float phase = fmodf(t * 440.f, 1.0f);  // 0..1
+            //float s = 2.0f * phase - 1.0f;    
+            float fade = 1.0f;
+            float fadeStart = duration - 2.0f;
+            if (t > fadeStart) {
+                float x = (t - fadeStart) / 2.0f;
+                fade = expf(-3.0f * x);
+            }
+            af.samples[i] = s * fade;
+        }
+        loopPoint_l = 0;
+        if (guiIsCreated) {
+            adj_set_max_value(wview->adj, (float)af.samplesize);
+            adj_set_state(loopMark_L->adj, 0.0);
+            adj_set_state(loopMark_R->adj,1.0);
+        }
+        loopPoint_l = 0;
+        loopPoint_r = af.samplesize;
+        setOneShootToBank();
+        button_setLoop_callback(setLoop, NULL);
     }
 
 /****************************************************************
@@ -1302,6 +1402,18 @@ private:
         self->sharp = adj_get_value(w->adj);
         self->process_sharp();
         self->process_sample_sharp();
+        self->setOneShootBank();
+        self->setLoopToBank();
+    }
+
+    // saw control
+    static void saw_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->saw = adj_get_value(w->adj);
+        self->process_sharp();
+        self->process_sample_sharp();
+        self->setOneShootBank();
         self->setLoopToBank();
     }
 
@@ -1727,6 +1839,8 @@ private:
         for (size_t i = 0; i < presetFiles.size(); ++i) {
             menu_add_entry(loadSub, presetFiles[i].c_str());
         }
+        Widget_t *def = menu_add_item(menu, "Default");
+        def->parent_struct = (void*)this;
         menuSave->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
             Widget_t *w = (Widget_t*)w_;
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -1746,6 +1860,11 @@ private:
                 std::string path = self->getPathFor(name);
                 self->loadPreset(path);
             }
+        };
+        def->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            Loopino *self = static_cast<Loopino*>(w->parent_struct);
+            self->generateSine();
         };
         pop_menu_show(w, menu, 8, true);
 
@@ -1869,7 +1988,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 4; // guard for future proof
+        header.version = 5; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -1886,6 +2005,8 @@ private:
         writeControllerValue(out, CutOff);
         // since version 4
          writeControllerValue(out, Sharp);
+        // since version 5
+         writeControllerValue(out, Saw);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -1907,7 +2028,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 4) {
+        if (header.version > 5) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -1926,6 +2047,9 @@ private:
         if (header.version > 3) {
             readControllerValue(in, Sharp);
         }
+        if (header.version > 4) {
+            readControllerValue(in, Saw);
+        }
 
         readSampleBuffer(in, af.samples, af.samplesize);
         in.close();
@@ -1933,8 +2057,9 @@ private:
         adj_set_state(loopMark_L->adj, 0.0);
         adj_set_state(loopMark_R->adj,1.0);
         loadLoopNew = true;
-        loadNew = true;
-        update_waveview(wview, af.samples, af.samplesize);
+        //loadNew = true;
+       // update_waveview(wview, af.samples, af.samplesize);
+        haveDefault = false;
         loadPresetToSynth();
         std::filesystem::path p = filename;
         presetName = p.stem().string();

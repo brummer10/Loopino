@@ -39,6 +39,7 @@
             adj_set_value(Resonance->adj, resonance);
             adj_set_value(CutOff->adj, cutoff);
             adj_set_value(Sharp->adj, sharp);
+            adj_set_value(Saw->adj, saw);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -182,7 +183,7 @@
     void saveState(T* out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 4; // guard for future proof
+        header.version = 5; // guard for future proof
         header.dataSize = af.samplesize;
         out->write(out, &header, sizeof(header));
 
@@ -199,6 +200,8 @@
         out->write(out, &cutoff, sizeof(cutoff));
         // since version 4
         out->write(out, &sharp, sizeof(sharp));
+        // since version 5
+        out->write(out, &saw, sizeof(saw));
 
         writeSamples(out, af.samples, af.samplesize);
     }
@@ -232,7 +235,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 4) {
+        if (header.version > 5) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -252,9 +255,13 @@
         if (header.version > 3) {
             in->read(in, &sharp, sizeof(sharp));
         }
+        if (header.version > 4) {
+            in->read(in, &saw, sizeof(saw));
+        }
 
         readSamples(in, af.samples, af.samplesize);
         havePresetToLoad = true;
+        haveDefault = false;
         return true;
     }
 
