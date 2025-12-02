@@ -95,6 +95,7 @@ public:
     int16_t matches;
     int16_t currentLoop;
     int16_t loopPeriods;
+    int16_t timer;
 
     float freq;
     float loopFreq;
@@ -110,6 +111,7 @@ public:
     bool ready;
     bool havePresetToLoad;
     bool haveDefault;
+    bool record;
 
     Loopino() : af() {
         jack_sr = 0;
@@ -128,6 +130,7 @@ public:
         ready = true;
         havePresetToLoad = false;
         haveDefault = true;
+        record = false;
         matches = 0;
         currentLoop = 0;
         loopPeriods = 1;
@@ -151,6 +154,7 @@ public:
         sharp = 0.0f;
         saw = 0.0f;
         useLoop = 0;
+        timer = 30;
         generateKeys();
         guiIsCreated = false;
         analyseBuffer = new float[40960];
@@ -474,6 +478,14 @@ public:
         commonWidgetSettings(setLoop);
 
         #ifndef RUN_AS_PLUGIN
+        Record = add_image_toggle_button(lw, "", 350, 148, 35, 35);
+        Record->scale.gravity = SOUTHWEST;
+        widget_get_png(Record, LDVAR(record_png));
+        Record->flags |= HAS_TOOLTIP;
+        add_tooltip(Record, "Record Sample");
+        Record->func.value_changed_callback = button_record_callback;
+        commonWidgetSettings(Record);
+
         w_quit = add_button(lw, "", 390, 148, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
         w_quit->scale.gravity = SOUTHWEST;
@@ -521,6 +533,7 @@ private:
     Widget_t *setNextLoop;
     Widget_t *setPrevLoop;
     Widget_t *Presets;
+    Widget_t *Record;
 
     Widget_t *Attack;
     Widget_t *Decay;
@@ -984,6 +997,44 @@ private:
         }
     }
 
+    void record_sample() {
+        int new_size = static_cast<int>(4.0 * jack_sr);
+        delete[] af.samples;
+        af.samples = nullptr;
+        af.samples =  new float[new_size];
+        af.samplesize = new_size;
+        af.channels = 1;
+        std::memset(af.samples, 0, new_size * sizeof(float));
+        timer = 30;
+        loopPoint_l = 0;
+        loopPoint_r = af.samplesize;
+        position = 0;
+        play = false;
+        haveDefault = false;
+        if (guiIsCreated) {
+            loadNew = true;
+            update_waveview(wview, af.samples, af.samplesize);
+        }
+    }
+
+    void set_record() {
+        haveDefault = false;
+        timer = 30;
+        position = 0;
+        if (guiIsCreated) {
+            adj_set_max_value(wview->adj, (float)af.samplesize);
+            adj_set_state(loopMark_L->adj, 0.0);
+            adj_set_state(loopMark_R->adj,1.0);
+        }
+        setOneShootToBank();
+        if (guiIsCreated) button_setLoop_callback(setLoop, NULL);
+        else {
+            createLoop();
+            setLoopToBank();
+        }
+        
+    }
+
 /****************************************************************
             drag and drop handling for the main window
 ****************************************************************/
@@ -1066,6 +1117,11 @@ private:
         if (!play) {
             adj_set_value(playbutton->adj, 0.0);
             expose_widget(playbutton);
+        }
+        if (!record && timer == 0) {
+            set_record();
+            adj_set_value(Record->adj, 0.0);
+            expose_widget(Record);
         }
         expose_widget(keyboard);
         expose_widget(wview);
@@ -1199,6 +1255,16 @@ private:
         if (adj_get_value(w->adj)){
             self->play = true;
         } else self->play = false;
+    }
+
+    // playbutton
+    static void button_record_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        if (adj_get_value(w->adj)){
+            self->record_sample();
+            self->record = true;
+        } else self->record = false;
     }
 
     // set left loop point by value change
@@ -1705,7 +1771,8 @@ private:
 
         if (!self->ready) 
             show_spinning_wheel(w, nullptr);
-
+        if (self->record && self->timer > 0)
+            show_spinning_wheel(w, nullptr);
     }
 
     static void draw_lwview(void *w_, void* user_data) {
@@ -1769,7 +1836,7 @@ private:
             }
             di++;
             if (di>8.0) di = 0.0;
-       }
+        }
     }
 
     static void show_spinning_wheel(void *w_, void* user_data) {

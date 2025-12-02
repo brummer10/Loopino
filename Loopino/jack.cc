@@ -20,6 +20,7 @@
 
 jack_client_t *client;
 jack_port_t *midi_port;
+jack_port_t *in_port;
 jack_port_t *out_port;
 jack_port_t *out1_port;
 bool runProcess = false;
@@ -93,13 +94,42 @@ void process_midi(void* midi_input_port_buf) {
 int jack_process(jack_nframes_t nframes, void *arg) {
     if (!runProcess) return 0;
     void *midi_in = jack_port_get_buffer (midi_port, nframes);
+    float *input = static_cast<float *>(jack_port_get_buffer (in_port, nframes));
     float *output = static_cast<float *>(jack_port_get_buffer (out_port, nframes));
     float *output1 = static_cast<float *>(jack_port_get_buffer (out1_port, nframes));
 
     static float fRec0[2] = {0};
     static float fRec1[2] = {0};
+    static constexpr float THRESHOLD = 0.25f; // -12db
+    static uint32_t r = 0;
+    static bool rec = false;
 
     process_midi(midi_in);
+
+    float peak = 0.0f;
+    if (ui.record) {
+        for (uint32_t i = 0; i < (uint32_t)nframes; i++) {
+            float v = fabsf(input[i]);
+            if (v > peak) peak = v;
+        }
+        
+        if (peak > THRESHOLD) rec = true;
+    }
+
+    if (ui.record && rec) {
+        ui.timer = 0;
+        for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
+            ui.af.samples[r] = input[i];
+            r++;
+            ui.position++;
+            if (r > ui.af.samplesize) {
+                r = 0;
+                ui.record = false;
+                rec = false;
+                break;
+            }
+        }
+    }
 
     if (( ui.af.samplesize && ui.af.samples != nullptr) && ui.play && ui.ready) {
         float fSlow0 = 0.0010000000000000009 * ui.gain;
@@ -147,6 +177,8 @@ void startJack() {
     if (client) {
         midi_port = jack_port_register(
                        client, "in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+        in_port = jack_port_register(
+                       client, "in_0", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
         out_port = jack_port_register(
                        client, "out_0", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
         out1_port = jack_port_register(
@@ -179,6 +211,10 @@ void quitJack() {
             jack_port_disconnect(client,midi_port);
         }
         jack_port_unregister(client,midi_port);
+        if (jack_port_connected(in_port)) {
+            jack_port_disconnect(client,in_port);
+        }
+        jack_port_unregister(client,in_port);
         if (jack_port_connected(out_port)) {
             jack_port_disconnect(client,out_port);
         }
