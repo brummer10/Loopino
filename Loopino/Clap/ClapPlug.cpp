@@ -15,7 +15,7 @@
 
 typedef struct plugin_t plugin_t;
 
-#define RUN_AS_CLAP_PLUGIN
+#define RUN_AS_PLUGIN
 
 #define WINDOW_WIDTH  880
 #define WINDOW_HEIGHT 290
@@ -33,6 +33,26 @@ typedef struct plugin_t plugin_t;
 
 #include "Loopino_ui.h"
 
+struct ClapStreamOut : StreamOut {
+    const clap_ostream_t* out;
+
+    ClapStreamOut(const clap_ostream_t* o) : out(o) {}
+
+    void write(const void* data, size_t size) override {
+        out->write(out, data, size);
+    }
+};
+
+struct ClapStreamIn : StreamIn {
+    const clap_istream_t* in;
+
+    ClapStreamIn(const clap_istream_t* i) : in(i) {}
+
+    void read(void* data, size_t size) override {
+        in->read(in, data, size);
+    }
+};
+
 // Plugin data structure
 struct plugin_t {
     clap_plugin_t plugin;
@@ -40,6 +60,7 @@ struct plugin_t {
     Loopino *r;
     bool isInited;
     bool guiIsCreated;
+    bool havePresetToLoad;
     uint32_t latency;
     uint32_t width;
     uint32_t height;
@@ -228,13 +249,16 @@ static const clap_plugin_latency_t latency_extension = {
 // State Management
 static bool state_save(const clap_plugin_t *plugin, const clap_ostream_t *stream) {
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
-    plug->r->saveState(stream);
+    ClapStreamOut st(stream);
+    plug->r->saveState(st);
     return true;
 }
 
 static bool state_load(const clap_plugin_t *plugin, const clap_istream_t *stream) {
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
-    if (plug->r->readState(stream)) {
+    ClapStreamIn st(stream);
+    if (plug->r->readState(st)) {
+        plug->havePresetToLoad = true;
         plug->r->loadPresetToSynth();
         return true;
     }
@@ -542,6 +566,8 @@ static bool activate(const struct clap_plugin *plugin,
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
     plug->r->setJackSampleRate(sample_rate);
     plug->isInited = true;
+    if (plug->havePresetToLoad) plug->r->loadPresetToSynth();
+    plug->havePresetToLoad = false;
     return true;
 }
 
@@ -588,6 +614,7 @@ static const clap_plugin_t *create(const clap_host_t *host) {
     plug->r = new Loopino();
     plug->guiIsCreated = false;
     plug->isInited = false;
+    plug->havePresetToLoad = false;
     plug->width = WINDOW_WIDTH;
     plug->height = WINDOW_HEIGHT;
     plug->plugin.desc = &descriptor;

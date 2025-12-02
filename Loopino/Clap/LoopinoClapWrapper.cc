@@ -159,13 +159,10 @@
         return w_top->app;
     }
 
-    template <typename T>
-    bool writeSamples(T* out, const float* samples, uint32_t numData) {
+    bool writeSamples(StreamOut& out, const float* samples, uint32_t numData) {
         if (!samples || numData == 0) return false;
 
-        if (!out) return false;
-
-        out->write(out, &numData, sizeof(numData));
+        out.write(&numData, sizeof(numData));
         float maxVal = 0.0f;
         for (size_t i = 0; i < numData; ++i) {
             maxVal = max(maxVal, std::fabs(samples[i]));
@@ -175,43 +172,39 @@
         for (size_t i = 0; i < numData; ++i) {
             float normalized = samples[i] / maxVal;
             int16_t encoded = static_cast<int16_t>(std::round(normalized * 32767.0f));
-            out->write(out, &encoded, sizeof(encoded));
+            out.write(&encoded, sizeof(encoded));
         }
         return true;
     }
 
-    template <typename T>
-    void saveState(T* out) {
+    void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
         header.version = 5; // guard for future proof
         header.dataSize = af.samplesize;
-        out->write(out, &header, sizeof(header));
+        out.write(&header, sizeof(header));
 
-        out->write(out, &currentLoop, sizeof(currentLoop));
-        out->write(out, &attack, sizeof(attack));
-        out->write(out, &decay, sizeof(decay));
-        out->write(out, &sustain, sizeof(sustain));
-        out->write(out, &release, sizeof(release));
-        out->write(out, &frequency, sizeof(frequency));
-        out->write(out, &useLoop, sizeof(useLoop));
-        out->write(out, &loopPeriods, sizeof(loopPeriods));
+        out.write(&currentLoop, sizeof(currentLoop));
+        out.write(&attack, sizeof(attack));
+        out.write(&decay, sizeof(decay));
+        out.write(&sustain, sizeof(sustain));
+        out.write(&release, sizeof(release));
+        out.write(&frequency, sizeof(frequency));
+        out.write(&useLoop, sizeof(useLoop));
+        out.write(&loopPeriods, sizeof(loopPeriods));
         // since version 3
-        out->write(out, &resonance, sizeof(resonance));
-        out->write(out, &cutoff, sizeof(cutoff));
+        out.write(&resonance, sizeof(resonance));
+        out.write(&cutoff, sizeof(cutoff));
         // since version 4
-        out->write(out, &sharp, sizeof(sharp));
+        out.write(&sharp, sizeof(sharp));
         // since version 5
-        out->write(out, &saw, sizeof(saw));
+        out.write(&saw, sizeof(saw));
 
         writeSamples(out, af.samples, af.samplesize);
     }
 
-    template <typename T>
-    bool readSamples(T* in, float*& samples, uint32_t& numData) {
-        if (!in) return false;
-
-        in->read(in, &numData, sizeof(numData));
+    bool readSamples(StreamIn& in, float*& samples, uint32_t& numData) {
+        in.read(&numData, sizeof(numData));
         if (numData == 0) return false;
         delete[] samples;
         samples = nullptr;
@@ -219,16 +212,15 @@
         
         for (size_t i = 0; i < numData; ++i) {
             int16_t encoded;
-            in->read(in, &encoded, sizeof(encoded));
+            in.read(&encoded, sizeof(encoded));
             samples[i] = static_cast<float>(encoded) / 32767.0f;
         }
         return true;
     }
 
-    template <typename T>
-    bool readState(T* in) {
+    bool readState(StreamIn& in) {
         PresetHeader header{};
-        in->read(in, &header, sizeof(header));
+        in.read(&header, sizeof(header));
         if (std::strncmp(header.magic, "LOOPINO", 7) != 0) {
             std::cerr << "Invalid preset file\n";
             return false;
@@ -241,23 +233,23 @@
         }
 
         af.channels = 1;
-        in->read(in, &currentLoop, sizeof(currentLoop));
-        in->read(in, &attack, sizeof(attack));
-        in->read(in, &decay, sizeof(decay));
-        in->read(in, &sustain, sizeof(sustain));
-        in->read(in, &release, sizeof(release));
-        in->read(in, &frequency, sizeof(frequency));
-        in->read(in, &useLoop, sizeof(useLoop));
-        in->read(in, &loopPeriods, sizeof(loopPeriods));
+        in.read(&currentLoop, sizeof(currentLoop));
+        in.read(&attack, sizeof(attack));
+        in.read(&decay, sizeof(decay));
+        in.read(&sustain, sizeof(sustain));
+        in.read(&release, sizeof(release));
+        in.read(&frequency, sizeof(frequency));
+        in.read(&useLoop, sizeof(useLoop));
+        in.read(&loopPeriods, sizeof(loopPeriods));
         if (header.version > 2) {
-            in->read(in, &resonance, sizeof(resonance));
-            in->read(in, &cutoff, sizeof(cutoff));
+            in.read(&resonance, sizeof(resonance));
+            in.read(&cutoff, sizeof(cutoff));
         }
         if (header.version > 3) {
-            in->read(in, &sharp, sizeof(sharp));
+            in.read(&sharp, sizeof(sharp));
         }
         if (header.version > 4) {
-            in->read(in, &saw, sizeof(saw));
+            in.read(&saw, sizeof(saw));
         }
 
         readSamples(in, af.samples, af.samplesize);

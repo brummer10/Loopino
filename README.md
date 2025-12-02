@@ -44,3 +44,15 @@ sudo make install # will install into /usr/lib/clap
 or
 make install # will install into ~/.clap
 ```
+
+## Building as vst2 plugin from source code
+
+```shell
+git clone https://github.com/brummer10/Loopino.git
+cd Loopino
+git submodule update --init --recursive
+make vst2
+sudo make install # will install into /usr/lib/vst
+or
+make install # will install into ~/.vst
+```

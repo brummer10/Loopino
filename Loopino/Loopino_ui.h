@@ -39,6 +39,16 @@
 #ifndef LOOPINO_H
 #define LOOPINO_H
 
+struct StreamOut {
+    virtual void write(const void* data, size_t size) = 0;
+    virtual ~StreamOut() = default;
+};
+
+struct StreamIn {
+    virtual void read(void* data, size_t size) = 0;
+    virtual ~StreamIn() = default;
+};
+
 /****************************************************************
     class Loopino - create the GUI for loopino
 ****************************************************************/
@@ -144,7 +154,7 @@ public:
         generateKeys();
         guiIsCreated = false;
         analyseBuffer = new float[40960];
-        #if defined (RUN_AS_CLAP_PLUGIN)
+        #if defined (RUN_AS_PLUGIN)
         registerParameters();
         #endif
     };
@@ -174,7 +184,7 @@ public:
     void setJackSampleRate(uint32_t sr) {
         jack_sr = sr;        
         synth.init((double)jack_sr, 48);
-        generateSine();
+        if (!havePresetToLoad) generateSine();
         //loadPreset(presetFile);
     }
 
@@ -201,6 +211,7 @@ public:
     }
 
     void loadPresetToSynth() {
+        std::cout << "loadPresetToSynth" << std::endl;
         af.channels = 1;
         loopPoint_l = 0;
         loopPoint_r = af.samplesize;
@@ -208,7 +219,7 @@ public:
         if (createLoop()) {
             setLoopToBank();
         } 
-        #if defined (RUN_AS_CLAP_PLUGIN)
+        #if defined (RUN_AS_PLUGIN)
         setValuesFromHost();
         #endif
     }
@@ -218,13 +229,13 @@ public:
 ****************************************************************/
 
     void markDirty(int num) {
-        #if defined (RUN_AS_CLAP_PLUGIN)
+        #if defined (RUN_AS_PLUGIN)
         param.setParamDirty(num , true);
         param.controllerChanged.store(true, std::memory_order_release);
         #endif
     }
 
-#if defined (RUN_AS_CLAP_PLUGIN)
+#if defined (RUN_AS_PLUGIN)
 #include "Clap/LoopinoClapWrapper.cc"
 #endif
 
@@ -234,7 +245,7 @@ public:
 
     // create the main GUI
     void createGUI(Xputty *app) {
-        #ifndef RUN_AS_CLAP_PLUGIN
+        #ifndef RUN_AS_PLUGIN
         set_custom_theme(app);
         w_top = create_window(app, os_get_root_window(app, IS_WINDOW), 0, 0, 880, 290);
         widget_set_title(w_top, "loopino");
@@ -462,7 +473,7 @@ public:
         setLoop->func.value_changed_callback = button_set_callback;
         commonWidgetSettings(setLoop);
 
-        #ifndef RUN_AS_CLAP_PLUGIN
+        #ifndef RUN_AS_PLUGIN
         w_quit = add_button(lw, "", 390, 148, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
         w_quit->scale.gravity = SOUTHWEST;
@@ -484,7 +495,7 @@ public:
         keys->mk_send_note = get_note;
         keys->mk_send_all_sound_off = all_notes_off;
 
-        #ifndef RUN_AS_CLAP_PLUGIN
+        #ifndef RUN_AS_PLUGIN
         widget_show_all(w_top);
         #endif
         pa.startTimeout(60);

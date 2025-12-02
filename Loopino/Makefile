@@ -81,6 +81,10 @@ endif
 	CLAP_INCLUDE := -I. -I./Clap/clap/ -I./Clap/
 	CLAP_SOURCES := $(CLAP_DIR)ClapPlug.cpp
 
+	VST2_DIR := ./vst2/
+	VST2_INCLUDE := -I. -I./vst2/ -I./Clap/
+	VST2_SOURCES := $(VST2_DIR)Loopinovst.cpp
+
 ifeq ($(TARGET), Linux)
 	# set compile flags
 	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f`\
@@ -133,6 +137,11 @@ clap: $(NAME).clap
 	$(QUIET)cp ./$(NAME).clap ../bin/
 	@$(B_ECHO) "=================== DONE =======================$(reset)"
 
+vst2: $(NAME)vst.$(LIB_EXT)
+	$(QUIET)mkdir -p ../bin/
+	$(QUIET)cp ./$(NAME)vst.$(LIB_EXT) ../bin/
+	@$(B_ECHO) "=================== DONE =======================$(reset)"
+
 -include $(DEPS)
 
 check :
@@ -144,7 +153,7 @@ endif
 clean :
 	$(QUIET)rm -f *.o *.d *.a *.lib 
 	$(QUIET)rm -f $(RESAMP_DIR)*.a $(RESAMP_DIR)*.lib $(RESAMP_DIR)*.o $(RESAMP_DIR)*.d
-	$(QUIET)rm -f $(NAME).exe $(NAME) $(NAME).clap
+	$(QUIET)rm -f $(NAME).exe $(NAME) $(NAME).clap $(NAME)vst.$(LIB_EXT)
 	$(QUIET)rm -rf ../bin
 
 dist-clean :
@@ -170,12 +179,21 @@ ifneq ("$(wildcard ../bin/$(NAME).clap)","")
 else
 	@$(B_ECHO) "$(NAME).clap Clap skipped$(reset)"
 endif
+ifneq ("$(wildcard ../bin/$(NAME)vst.$(LIB_EXT))","")
+	@$(B_ECHO) "Install  $(NAME)vst.$(LIB_EXT) to $(DESTDIR)$(VST2_INSTAL_DIR)/$(reset)"
+	$(QUIET)mkdir -p $(DESTDIR)$(VST2_INSTAL_DIR)/
+	$(QUIET)cp -r ../bin/$(NAME)vst.$(LIB_EXT) $(DESTDIR)$(VST2_INSTAL_DIR)/$(NAME)vst.$(LIB_EXT)
+	@$(B_ECHO) ". ., done$(reset)"
+else
+	@$(B_ECHO) "$(NAME)vst.$(LIB_EXT) vst2 skipped$(reset)"
+endif
 
 uninstall :
 	$(QUIET)rm -rf $(DESTDIR)$(EXE_INSTALL_DIR)/$(NAME)
 	$(QUIET)rm -rf $(DESTDIR)$(DESKAPPS_DIR)/$(NAME).desktop
 	$(QUIET)rm -rf $(DESTDIR)$(PIXMAPS_DIR)/$(NAME).svg
 	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
+	$(QUIET)rm -rf $(DESTDIR)$(VST2_INSTAL_DIR)/$(NAME)vst.$(LIB_EXT)
 
 $(RESAMP_OBJ): $(RESAMP_SOURCES)
 	@$(ECHO) "Building object file $@ $(reset)"
@@ -191,6 +209,13 @@ $(NAME).clap:  $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
 	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME).clap
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
+endif
+
+$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
+	@$(B_ECHO) "Compiling $(NAME)vst.$(LIB_EXT) $(reset)"
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME)vst.$(LIB_EXT)
+ifeq (,$(filter yes,$(DEBUG)))
+	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME)vst.$(LIB_EXT)
 endif
 
 $(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h

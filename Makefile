@@ -1,9 +1,9 @@
 
 include libxputty/Build/Makefile.base
 
-NOGOAL := mod install all features clap
+NOGOAL := mod install all features clap vst2
 
-SWITCHGOAL := clap
+SWITCHGOAL := clap vst2
 
 PASS := features 
 
