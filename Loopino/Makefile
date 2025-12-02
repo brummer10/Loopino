@@ -21,7 +21,9 @@ else
 endif
 
 ifneq ($(MAKECMDGOALS),clap)
-  USEAPI = jack
+  ifneq ($(MAKECMDGOALS),vst2)
+    USEAPI = jack
+  endif
 endif
 
 	# check CPU and supported optimization flags
