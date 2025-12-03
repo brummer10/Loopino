@@ -21,10 +21,11 @@
         param.registerParam("Volume",    "Synth", -20.0, 6.0, 0.0, 0.1,   (void*)&volume,      false,  IS_FLOAT);
         param.registerParam("Use Loop",  "Synth", 0, 1, 0, 1,             (void*)&useLoop,     true,   IS_INT);
         param.registerParam("Loop Size", "Synth", 1, 12, 1, 1,            (void*)&loopPeriods, true,   IS_INT);
-        param.registerParam("Resonance", "Synth", 0.0, 127.0, 0.0, 1.0,   (void*)&resonance,   true,   IS_FLOAT);
-        param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 127.0, 1.0, (void*)&cutoff,      true,   IS_FLOAT);
-        param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       true,   IS_FLOAT);
-        param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         true,   IS_FLOAT);
+        param.registerParam("Resonance", "Synth", 0.0, 127.0, 0.0, 1.0,   (void*)&resonance,   false,  IS_FLOAT);
+        param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 127.0, 1.0, (void*)&cutoff,      false,  IS_FLOAT);
+        param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       false,  IS_FLOAT);
+        param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         false,  IS_FLOAT);
+        param.registerParam("FadeOut",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&fadeout,     false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -41,6 +42,7 @@
             adj_set_value(CutOff->adj, cutoff);
             adj_set_value(Sharp->adj, sharp);
             adj_set_value(Saw->adj, saw);
+            adj_set_value(FadeOut->adj, fadeout);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -180,7 +182,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 5; // guard for future proof
+        header.version = 6; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -199,6 +201,8 @@
         out.write(&sharp, sizeof(sharp));
         // since version 5
         out.write(&saw, sizeof(saw));
+        // since version 6
+        out.write(&fadeout, sizeof(fadeout));
 
         writeSamples(out, af.samples, af.samplesize);
     }
@@ -228,7 +232,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 5) {
+        if (header.version > 6) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -250,6 +254,9 @@
         }
         if (header.version > 4) {
             in.read(&saw, sizeof(saw));
+        }
+        if (header.version > 5) {
+            in.read(&fadeout, sizeof(fadeout));
         }
 
         readSamples(in, af.samples, af.samplesize);

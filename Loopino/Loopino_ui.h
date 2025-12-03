@@ -153,6 +153,7 @@ public:
         volume = 0.0f;
         sharp = 0.0f;
         saw = 0.0f;
+        fadeout = 0.0f;
         useLoop = 0;
         timer = 30;
         generateKeys();
@@ -265,7 +266,7 @@ public:
         commonWidgetSettings(w_top);
         os_set_window_min_size(w_top, 798, 190, 880, 290);
 
-        w = create_widget(app, w_top, 0, 0, 440, 190);
+        w = create_widget(app, w_top, 0, 0, 440, 210);
         w->parent = w_top;
         w->scale.gravity = NORTCENTER;
         w->func.expose_callback = draw_window;
@@ -301,7 +302,7 @@ public:
         wview->func.button_release_callback = set_playhead;
         commonWidgetSettings(wview);
 
-        lw = create_widget(app, w_top, 440, 0, 440, 190);
+        lw = create_widget(app, w_top, 440, 0, 440, 210);
         lw->parent = w_top;
         lw->scale.gravity = NORTCENTER;
         lw->func.expose_callback = draw_window;
@@ -315,7 +316,7 @@ public:
         loopview->func.button_release_callback = set_playhead;
         commonWidgetSettings(loopview);
 
-        filebutton = add_file_button(w, 20, 148, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
+        filebutton = add_file_button(w, 20, 158, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
         filebutton->scale.gravity = SOUTHEAST;
         widget_get_png(filebutton, LDVAR(load__png));
         filebutton->flags |= HAS_TOOLTIP;
@@ -323,7 +324,7 @@ public:
         filebutton->func.user_callback = dialog_response;
         commonWidgetSettings(filebutton);
 
-        Attack = add_knob(w, "Attack",60,145,38,38);
+        Attack = add_knob(w, "Attack",60,155,38,38);
         Attack->scale.gravity = SOUTHWEST;
         Attack->flags |= HAS_TOOLTIP;
         add_tooltip(Attack, "Attack");
@@ -333,7 +334,7 @@ public:
         Attack->func.value_changed_callback = attack_callback;
         commonWidgetSettings(Attack);
 
-        Decay = add_knob(w, "Decay",100,145,38,38);
+        Decay = add_knob(w, "Decay",100,155,38,38);
         Decay->scale.gravity = SOUTHWEST;
         Decay->flags |= HAS_TOOLTIP;
         add_tooltip(Decay, "Decay");
@@ -343,7 +344,7 @@ public:
         Decay->func.value_changed_callback = decay_callback;
         commonWidgetSettings(Decay);
 
-        Sustain = add_knob(w, "Sustain",140,145,38,38);
+        Sustain = add_knob(w, "Sustain",140,155,38,38);
         Sustain->scale.gravity = SOUTHWEST;
         Sustain->flags |= HAS_TOOLTIP;
         add_tooltip(Sustain, "Sustain");
@@ -353,7 +354,7 @@ public:
         Sustain->func.value_changed_callback = sustain_callback;
         commonWidgetSettings(Sustain);
 
-        Release = add_knob(w, "Release",180,145,38,38);
+        Release = add_knob(w, "Release",180,155,38,38);
         Release->scale.gravity = SOUTHWEST;
         Release->flags |= HAS_TOOLTIP;
         add_tooltip(Release, "Release");
@@ -363,7 +364,7 @@ public:
         Release->func.value_changed_callback = release_callback;
         commonWidgetSettings(Release);
 
-        Frequency = add_valuedisplay(w, _(" Hz"), 220, 150, 60, 30);
+        Frequency = add_valuedisplay(w, _(" Hz"), 220, 160, 60, 30);
         set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
         Frequency->scale.gravity = SOUTHWEST;
         Frequency->flags |= HAS_TOOLTIP;
@@ -371,7 +372,7 @@ public:
         Frequency->func.value_changed_callback = frequency_callback;
         commonWidgetSettings(Frequency);
 
-        Resonance = add_knob(w, "Resonance",285,145,38,38);
+        Resonance = add_knob(w, "Resonance",285,155,38,38);
         Resonance->scale.gravity = SOUTHWEST;
         Resonance->flags |= HAS_TOOLTIP;
         add_tooltip(Resonance, "Resonance");
@@ -381,7 +382,7 @@ public:
         Resonance->func.value_changed_callback = resonance_callback;
         commonWidgetSettings(Resonance);
 
-        CutOff = add_knob(w, "CutOff",325,145,38,38);
+        CutOff = add_knob(w, "CutOff",325,155,38,38);
         CutOff->scale.gravity = SOUTHWEST;
         CutOff->flags |= HAS_TOOLTIP;
         add_tooltip(CutOff, "CutOff");
@@ -391,7 +392,7 @@ public:
         CutOff->func.value_changed_callback = cutoff_callback;
         commonWidgetSettings(CutOff);
 
-        clip = add_button(w, "", 365, 148, 35, 35);
+        clip = add_button(w, "", 365, 158, 35, 35);
         clip->scale.gravity = SOUTHWEST;
         widget_get_png(clip, LDVAR(clip__png));
         clip->flags |= HAS_TOOLTIP;
@@ -399,7 +400,7 @@ public:
         clip->func.value_changed_callback = button_clip_callback;
         commonWidgetSettings(clip);
 
-        playbutton = add_image_toggle_button(w, "", 400, 148, 35, 35);
+        playbutton = add_image_toggle_button(w, "", 400, 158, 35, 35);
         playbutton->scale.gravity = SOUTHWEST;
         widget_get_png(playbutton, LDVAR(play_png));
         playbutton->flags |= HAS_TOOLTIP;
@@ -408,7 +409,7 @@ public:
         commonWidgetSettings(playbutton);
 
 
-        Presets = add_button(lw, "", 20, 150, 35, 35);
+        Presets = add_button(lw, "", 0, 158, 35, 35);
         Presets->scale.gravity = SOUTHWEST;
         widget_get_png(Presets, LDVAR(presets_png));
         Presets->flags |= HAS_TOOLTIP;
@@ -416,7 +417,7 @@ public:
         Presets->func.value_changed_callback = presets_callback;
         commonWidgetSettings(Presets);
 
-        Sharp = add_knob(lw, "Sharp",60,145,38,38);
+        Sharp = add_knob(lw, "Sharp",40,155,38,38);
         Sharp->scale.gravity = SOUTHWEST;
         Sharp->flags |= HAS_TOOLTIP;
         add_tooltip(Sharp, "Square");
@@ -426,7 +427,7 @@ public:
         Sharp->func.value_changed_callback = sharp_callback;
         commonWidgetSettings(Sharp);
 
-        Saw = add_knob(lw, "Saw",100,145,38,38);
+        Saw = add_knob(lw, "Saw",80,155,38,38);
         Saw->scale.gravity = SOUTHWEST;
         Saw->flags |= HAS_TOOLTIP;
         add_tooltip(Saw, "Saw Tooth");
@@ -436,7 +437,17 @@ public:
         Saw->func.value_changed_callback = saw_callback;
         commonWidgetSettings(Saw);
 
-        setLoopSize = add_knob(lw, "S",140,145,38,38);
+        FadeOut = add_knob(lw, "FadeOut",120,155,38,38);
+        FadeOut->scale.gravity = SOUTHWEST;
+        FadeOut->flags |= HAS_TOOLTIP;
+        add_tooltip(FadeOut, "Fade Out Samplebuffer");
+        set_adjustment(FadeOut->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(FadeOut, (Color_state)1, (Color_mod)2, 0.15, 0.52, 0.55, 1.0);
+        FadeOut->func.expose_callback = draw_knob;
+        FadeOut->func.value_changed_callback = fade_callback;
+        commonWidgetSettings(FadeOut);
+
+        setLoopSize = add_knob(lw, "S",160,155,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
         setLoopSize->flags |= HAS_TOOLTIP;
         add_tooltip(setLoopSize, "Loop Periods");
@@ -445,21 +456,29 @@ public:
         setLoopSize->func.value_changed_callback = setLoopSize_callback;
         commonWidgetSettings(setLoopSize);
 
-        setPrevLoop = add_button(lw, "<", 180, 148, 35, 35);
+        setPrevLoop = add_button(lw, "<", 200, 158, 35, 35);
         setPrevLoop->scale.gravity = SOUTHWEST;
         setPrevLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setPrevLoop, "Load previous loop");
         setPrevLoop->func.value_changed_callback = setPrevLoop_callback;
         commonWidgetSettings(setPrevLoop);
 
-        setNextLoop = add_button(lw, ">", 215, 148, 35, 35);
+        setNextLoop = add_button(lw, ">", 235, 158, 35, 35);
         setNextLoop->scale.gravity = SOUTHWEST;
         setNextLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
         commonWidgetSettings(setNextLoop);
 
-        Volume = add_knob(lw, "dB",255,145,38,38);
+        setLoop = add_image_toggle_button(lw, "", 270, 158, 35, 35);
+        setLoop->scale.gravity = SOUTHWEST;
+        widget_get_png(setLoop, LDVAR(loop_png));
+        setLoop->flags |= HAS_TOOLTIP;
+        add_tooltip(setLoop, "Use Loop Sample");
+        setLoop->func.value_changed_callback = button_set_callback;
+        commonWidgetSettings(setLoop);
+
+        Volume = add_knob(lw, "dB",305,155,38,38);
         Volume->scale.gravity = SOUTHWEST;
         Volume->flags |= HAS_TOOLTIP;
         add_tooltip(Volume, "Volume (dB)");
@@ -469,16 +488,8 @@ public:
         Volume->func.value_changed_callback = volume_callback;
         commonWidgetSettings(Volume);
 
-        setLoop = add_image_toggle_button(lw, "", 300, 148, 35, 35);
-        setLoop->scale.gravity = SOUTHWEST;
-        widget_get_png(setLoop, LDVAR(loop_png));
-        setLoop->flags |= HAS_TOOLTIP;
-        add_tooltip(setLoop, "Use Loop Sample");
-        setLoop->func.value_changed_callback = button_set_callback;
-        commonWidgetSettings(setLoop);
-
         #ifndef RUN_AS_PLUGIN
-        Record = add_image_toggle_button(lw, "", 350, 148, 35, 35);
+        Record = add_image_toggle_button(lw, "", 350, 158, 35, 35);
         Record->scale.gravity = SOUTHWEST;
         widget_get_png(Record, LDVAR(record_png));
         Record->flags |= HAS_TOOLTIP;
@@ -486,7 +497,7 @@ public:
         Record->func.value_changed_callback = button_record_callback;
         commonWidgetSettings(Record);
 
-        w_quit = add_button(lw, "", 390, 148, 35, 35);
+        w_quit = add_button(lw, "", 390, 158, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
         w_quit->scale.gravity = SOUTHWEST;
         w_quit->flags |= HAS_TOOLTIP;
@@ -495,7 +506,7 @@ public:
         commonWidgetSettings(w_quit);
         #endif
 
-        keyboard = add_midi_keyboard(w_top, "Organ", 0, 190, 880, 100);
+        keyboard = add_midi_keyboard(w_top, "Organ", 0, 210, 880, 80);
         keyboard->flags |= HIDE_ON_DELETE;
         //keyboard->scale.gravity = SOUTHCENTER;
         keyboard->parent_struct = (void*)this;
@@ -503,6 +514,8 @@ public:
         Widget_t *view_port = keys->context_menu->childlist->childs[0];
         Widget_t *octavemap = view_port->childlist->childs[1];
         keys->octave = 12*3;
+        keys->velocity = 100;
+        adj_set_value(keys->vel->adj, keys->velocity);
         set_active_radio_entry_num(octavemap, keys->octave/12);
         keys->mk_send_note = get_note;
         keys->mk_send_all_sound_off = all_notes_off;
@@ -544,6 +557,7 @@ private:
     Widget_t *CutOff;
     Widget_t *Sharp;
     Widget_t *Saw;
+    Widget_t *FadeOut;
 
     Window    p;
 
@@ -572,6 +586,7 @@ private:
     float volume;
     float sharp;
     float saw;
+    float fadeout;
     int useLoop;
     
     float *analyseBuffer;
@@ -670,6 +685,24 @@ private:
         offline processor (sharp (square) and saw tooth)
 ****************************************************************/
 
+    void process_fadeout(std::vector<float>& buffer) {
+        if (buffer.empty()) return;
+        if (fadeout <= 0.0001f) return;
+        const size_t N = buffer.size();
+        const float f = fadeout * 2.0;
+        const float duration = N / jack_sr / f;
+        for (size_t i = 0; i < N; ++i) {
+            float t = (float)i / jack_sr;
+            float fade = 1.0f;
+            float fadeStart = duration - 2.0f;
+            if (t > fadeStart) {
+                float x = (t - fadeStart) / 2.0f;
+                fade = expf(-3.0f * x);
+            }
+            buffer[i] *= fade;
+        }
+    }
+
     void process_saw(std::vector<float>& buffer) {
         if (buffer.empty()) return;
         if (saw <= 0.0001f) return;
@@ -713,16 +746,22 @@ private:
             size_t snapSamples = size_t(snapTime * float(len));
             if (snapSamples < 1) snapSamples = 1;
             if (snapSamples > len / 3) snapSamples = len / 3;
-            float alpha = 0.25f + saw * 0.35f;
-            float beta  = 1.20f + saw * 0.50f;
-
-            for (size_t i = 0; i < snapSamples; ++i) {
-                float t = float(i) / float(snapSamples - 1);
-                float snapEnv = std::pow(t, alpha) * std::pow(1.0f - t, beta);
-                size_t idx = end - 1 - i;
+            if (snapSamples == 1) {
+                size_t idx = end - 1;
                 float snapTarget = (sgn > 0.0f ? mn : mx);
+                out[idx] = (out[idx] * 0.0f) + snapTarget * 1.0f;
+            } else {
+                float alpha = 0.25f + saw * 0.35f;
+                float beta  = 1.20f + saw * 0.50f;
 
-                out[idx] = out[idx] * (1.0f - snapEnv) + snapTarget * snapEnv;
+                for (size_t i = 0; i < snapSamples; ++i) {
+                    float t = float(i) / float(snapSamples - 1);
+                    float snapEnv = std::pow(t, alpha) * std::pow(1.0f - t, beta);
+                    size_t idx = end - 1 - i;
+                    float snapTarget = (sgn > 0.0f ? mn : mx);
+
+                    out[idx] = out[idx] * (1.0f - snapEnv) + snapTarget * snapEnv;
+                }
             }
             start = end;
         }
@@ -766,6 +805,7 @@ private:
         }
 
         process_saw(sampleBuffer);
+        process_fadeout(sampleBuffer);
         normalize(sampleBuffer, 0.6f);
 
         if (guiIsCreated) {
@@ -834,6 +874,14 @@ private:
         loopData.rootFreq = (double)(freq * cor);
         lbank.addSample(loopData);
         synth.setLoopBank(&lbank);
+        if (guiIsCreated) {
+            uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
+            std::string tittle = "loopino: loop size " + std::to_string(length)
+                                + " Samples | Key Note " + keys[loopRootkey]
+                                + " | loop " + std::to_string(currentLoop)
+                                + " from " + std::to_string(matches - 1);
+            widget_set_title(w_top, tittle.data());
+        }
     }
 
     void setBank() {
@@ -849,12 +897,6 @@ private:
         play_loop = true;
         if (guiIsCreated) {
             update_waveview(loopview, loopBuffer.data(), loopBuffer.size());
-            uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
-            std::string tittle = "loopino: loop size " + std::to_string(length)
-                                + " Samples | Key Note " + keys[loopRootkey]
-                                + " | loop " + std::to_string(currentLoop)
-                                + " from " + std::to_string(matches - 1);
-            widget_set_title(w_top, tittle.data());
         }
         setLoopBank();
     }
@@ -1162,8 +1204,9 @@ private:
     // send MIDI keyboard input to the synth
     static void get_note(Widget_t *w, const int *key, int on_off) {
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        MidiKeyboard* keys = (MidiKeyboard*)self->keyboard->private_struct;
         if (on_off == 0x90) {
-            self->synth.noteOn((int)(*key), 0.8f);              
+            self->synth.noteOn((int)(*key), (float(keys->velocity/127.0f)));              
         } else {
             self->synth.noteOff((int)(*key));
         }
@@ -1496,6 +1539,15 @@ private:
         self->process_sample_sharp();
         self->setOneShootBank();
         self->setLoopToBank();
+    }
+
+    // saw control
+    static void fade_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->fadeout = adj_get_value(w->adj);
+        self->process_sample_sharp();
+        self->setOneShootBank();
     }
 
 /****************************************************************
@@ -2070,7 +2122,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 5; // guard for future proof
+        header.version = 6; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -2089,6 +2141,8 @@ private:
          writeControllerValue(out, Sharp);
         // since version 5
          writeControllerValue(out, Saw);
+        // since version 6
+         writeControllerValue(out, FadeOut);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -2110,7 +2164,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 5) {
+        if (header.version > 6) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -2131,6 +2185,9 @@ private:
         }
         if (header.version > 4) {
             readControllerValue(in, Saw);
+        }
+        if (header.version > 5) {
+            readControllerValue(in, FadeOut);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);
