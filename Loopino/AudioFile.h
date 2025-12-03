@@ -121,6 +121,22 @@ public:
         sf_close(sf);
     }
 
+    // save a audio file from buffer to file
+    void saveAudioFile(std::string name, const float* buffer, const uint32_t size, const uint32_t SampleRate) {
+        SF_INFO sfinfo ;
+        sfinfo.channels = 1;
+        sfinfo.samplerate = SampleRate;
+        sfinfo.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+        SNDFILE * sf = sf_open(name.c_str(), SFM_WRITE, &sfinfo);
+        if (!sf) {
+            std::cerr << "fail to open " << name << std::endl;
+            return;
+        }
+        sf_writef_float(sf,&buffer[0], size);
+        sf_write_sync(sf);
+        sf_close(sf);
+    }
+
 };
 
 #endif

@@ -216,7 +216,7 @@ public:
     }
 
     void loadPresetToSynth() {
-        std::cout << "loadPresetToSynth" << std::endl;
+        //std::cout << "loadPresetToSynth" << std::endl;
         af.channels = 1;
         loopPoint_l = 0;
         loopPoint_r = af.samplesize;
@@ -689,7 +689,7 @@ private:
         if (buffer.empty()) return;
         if (fadeout <= 0.0001f) return;
         const size_t N = buffer.size();
-        const float f = fadeout * 2.0;
+        const float f = fadeout * 2.0f;
         const float duration = N / jack_sr / f;
         for (size_t i = 0; i < N; ++i) {
             float t = (float)i / jack_sr;
@@ -1081,6 +1081,24 @@ private:
             drag and drop handling for the main window
 ****************************************************************/
 
+    std::string url_decode(const std::string& encoded) {
+        std::ostringstream decoded;
+        for (size_t i = 0; i < encoded.length(); ++i) {
+            if (encoded[i] == '%') {
+                if (i + 2 < encoded.length()) {
+                    std::istringstream iss(encoded.substr(i + 1, 2));
+                    int hex;
+                    if (iss >> std::hex >> hex)
+                        decoded << static_cast<char>(hex);
+                    i += 2;
+                }
+            } else {
+                decoded << encoded[i];
+            }
+        }
+        return decoded.str();
+    }
+
     static void dnd_load_response(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -1089,11 +1107,11 @@ private:
             dndfile = strtok(*(char**)user_data, "\r\n");
             while (dndfile != NULL) {
                 if (self->supportedFormats.isSupported(dndfile) ) {
-                    self->filename = dndfile;
+                    self->filename = self->url_decode(dndfile);
                     self->loadFile();
                     break;
                 } else {
-                    std::cerr << "Unrecognized file extension: " << dndfile << std::endl;
+                    std::cerr << "Unrecognized file extension: " << self->filename << std::endl;
                 }
                 dndfile = strtok(NULL, "\r\n");
             }
@@ -1922,6 +1940,36 @@ private:
                       Preset handling
 ****************************************************************/
 
+    void showExportWindow() {
+        Widget_t *dia = save_file_dialog(w_top, "", "audio");
+        dia->private_struct = (void*)this;
+        #if defined(__linux__) || defined(__FreeBSD__) || \
+            defined(__NetBSD__) || defined(__OpenBSD__)
+        XSetTransientForHint(w_top->app->dpy, dia->widget, w_top->widget);
+        #endif
+        w_top->func.dialog_callback = [] (void *w_, void* user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            if(user_data !=NULL && strlen(*(const char**)user_data)) {
+                Loopino *self = static_cast<Loopino*>(w->parent_struct);
+                std::string filename = *(const char**)user_data;
+                std::string::size_type idx;
+                idx = filename.rfind('.');
+                if(idx != std::string::npos) {
+                    std::string extension = filename.substr(0, idx-1);
+                    filename = extension;
+                }
+                std::string sampleFileName = filename + self->keys[69] + ".wav";
+                std::string loopFileName = filename + self->keys[69] + "_loop" + ".wav";
+                std::vector<float> s;
+                std::vector<float> l;
+                self->synth.getSaveBuffer(false, s, 69, 1);
+                self->synth.getSaveBuffer(true, l, 69, 48);
+                self->af.saveAudioFile(sampleFileName, s.data(), s.size(), self->jack_sr);
+                self->af.saveAudioFile(loopFileName, l.data(), l.size(), self->jack_sr);
+            }
+        };
+    }
+
     std::string getPathFor(const std::string& name) const {
         return presetDir + name + ".presets";
     }
@@ -1975,6 +2023,8 @@ private:
         }
         Widget_t *def = menu_add_item(menu, "Default");
         def->parent_struct = (void*)this;
+        Widget_t *expo = menu_add_item(menu, "Export");
+        expo->parent_struct = (void*)this;
         menuSave->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
             Widget_t *w = (Widget_t*)w_;
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -1999,6 +2049,11 @@ private:
             Widget_t *w = (Widget_t*)w_;
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
             self->generateSine();
+        };
+        expo->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            Loopino *self = static_cast<Loopino*>(w->parent_struct);
+            self->showExportWindow();
         };
         pop_menu_show(w, menu, 8, true);
 

@@ -212,6 +212,38 @@ public:
         return val;
     }
 
+    void processSave(int duration, std::vector<float>& abuf) {
+        if (!sample || sample->empty()) return ;
+        int roll = duration;
+        const auto& s = *sample;
+        const size_t size = s.size();
+
+        while(roll > 0) {
+            size_t i0 = static_cast<size_t>(phase);
+            size_t i1 = std::min(i0 + 1, size - 1);
+            i0 = std::clamp<size_t>(i0, 0, s.size() -1);
+            i1 = std::clamp<size_t>(i1, 0, s.size() -1);
+            double frac = phase - (double)i0;
+
+            float val = static_cast<float>(s[i0] + frac * (s[i1] - s[i0]));
+
+            phase += phaseInc;
+
+            if (looping) {
+                if (phase >= loopEnd) {
+                    phase = loopStart + std::fmod(phase - loopStart, (loopEnd - loopStart));
+                    roll--;
+                }
+            } else {
+                if (phase >= size) {
+                    val = 0.0f; // end of sample
+                    roll = 0;
+                }
+            }
+            abuf.push_back(val);
+        }
+    }
+
 private:
     double srIn = 44100.0;
     double srOut = 44100.0;
@@ -361,6 +393,20 @@ public:
         }
     }
 
+    void getSaveBuffer(bool loop, std::vector<float>& abuf, uint8_t rootKey, int duration,
+                        const std::vector<float>* sampleData,
+                        double sourceRate, double rootFreq) {
+
+        player.setSample(sampleData, sourceRate);
+        player.setFrequency(midiToFreq(rootKey), rootFreq);
+        player.setLoop(0, sampleData->size() - 1, loop);
+        player.reset();
+        player.processSave(duration, abuf);
+        for (uint32_t i = 0; i < abuf.size(); i++) {
+            abuf[i] = filter.process(abuf[i]);
+        }
+    }
+
     bool isActive() const { return active; }
 
 private:
@@ -451,6 +497,12 @@ public:
     void getAnalyseBuffer(float *abuf, int frames) {
         const auto s = loopBank->getSample(0);
         voices[voices.size() - 1].getAnalyseBuffer(abuf, frames, &s->data, s->sourceRate, s->rootFreq);
+    }
+
+    void getSaveBuffer(bool loop, std::vector<float>& abuf, uint8_t rootKey, uint32_t duration) {
+        auto s = sampleBank->getSample(0);
+        if (loop) s = loopBank->getSample(0);
+        voices[voices.size() - 1].getSaveBuffer(loop, abuf, rootKey, duration, &s->data, s->sourceRate, s->rootFreq);
     }
 
     void setAttack(float a) {
