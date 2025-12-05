@@ -26,6 +26,9 @@
         param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       false,  IS_FLOAT);
         param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         false,  IS_FLOAT);
         param.registerParam("FadeOut",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&fadeout,     false,  IS_FLOAT);
+        param.registerParam("PmFreq",    "Synth", 0.01, 200.0, 0.01, 0.01,(void*)&pmfreq,      false,  IS_FLOAT);
+        param.registerParam("PmDepth",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&pmdepth,     false,  IS_FLOAT);
+        param.registerParam("PmMode",    "Synth", 0, 3, 1, 1,             (void*)&pmmode,      true,   IS_INT);
     }
 
     void setValuesFromHost() {
@@ -43,6 +46,9 @@
             adj_set_value(Sharp->adj, sharp);
             adj_set_value(Saw->adj, saw);
             adj_set_value(FadeOut->adj, fadeout);
+            adj_set_value(PmFreq->adj, pmfreq);
+            adj_set_value(PmDepth->adj, pmdepth);
+            radio_box_set_active(PmMode[pmmode]);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -53,6 +59,9 @@
             gain = std::pow(1e+01, 0.05 * volume);
             synth.setReso(resonance);
             synth.setCutoff(cutoff);
+            synth.setPmFreq(pmfreq);
+            synth.setPmDepth(pmdepth);
+            synth.setPmMode(pmmode);
         }
     }
 
@@ -182,7 +191,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 6; // guard for future proof
+        header.version = 7; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -203,6 +212,10 @@
         out.write(&saw, sizeof(saw));
         // since version 6
         out.write(&fadeout, sizeof(fadeout));
+        // since version 7
+        out.write(&pmfreq, sizeof(pmfreq));
+        out.write(&pmdepth, sizeof(pmdepth));
+        out.write(&pmmode, sizeof(pmmode));
 
         writeSamples(out, af.samples, af.samplesize);
     }
@@ -232,7 +245,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 6) {
+        if (header.version > 7) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -257,6 +270,11 @@
         }
         if (header.version > 5) {
             in.read(&fadeout, sizeof(fadeout));
+        }
+        if (header.version > 6) {
+            in.read(&pmfreq, sizeof(pmfreq));
+            in.read(&pmdepth, sizeof(pmdepth));
+            in.read(&pmmode, sizeof(pmmode));
         }
 
         readSamples(in, af.samples, af.samplesize);

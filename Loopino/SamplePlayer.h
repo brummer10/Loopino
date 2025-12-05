@@ -135,19 +135,20 @@ struct SampleInfo {
 
 class SampleBank {
 public:
-    void addSample(const SampleInfo& s) { samples.push_back(s); }
+    void addSample(std::shared_ptr<const SampleInfo> s) {
+        samples.push_back(std::move(s));
+    }
 
-    void clear() {samples.clear(); }
-
-    const SampleInfo* getSample(size_t index) const {
-        if (index >= samples.size()) return nullptr;
-        return &samples[index];
+    std::shared_ptr<const SampleInfo> getSample(size_t index) const {
+        if (index >= samples.size())
+            return nullptr;
+        return samples[index];
     }
 
     size_t size() const { return samples.size(); }
 
 private:
-    std::vector<SampleInfo> samples;
+    std::vector<std::shared_ptr<const SampleInfo>> samples;
 };
 
 /****************************************************************
@@ -156,19 +157,32 @@ private:
 
 class SamplePlayer {
 public:
+    std::atomic<const SampleInfo*> sample { nullptr };
+    std::shared_ptr<const SampleInfo> currentSampleOwner;
+    double pmPhase = 0.0;
+    double pmFreq = 0.0;
+    double pmDepthNorm = 0.0;
+    float pmDepthSamplesMax = 80.0f;
+    float pm_s1 = 0.0f;
+    float pm_s2 = 0.0f;
+
     SamplePlayer(double outputRate = 44100.0)
-        : srOut(outputRate), phase(0.0), phaseInc(0.0),
-          loopStart(0), loopEnd(0), looping(false), sample(nullptr) {}
+        :  sample(nullptr), srOut(outputRate), phase(0.0), phaseInc(0.0),
+          loopStart(0), loopEnd(0), looping(false) {}
 
     void setSampleRate(double sr) {srOut = sr;}
 
-    void setSample(const std::vector<float>* s, double sourceRate) {
-        sample = s;
+    void setSample(std::shared_ptr<const SampleInfo> s, double sourceRate) {
+        currentSampleOwner = s;
+        sample.store(s.get(), std::memory_order_release);
         srIn = sourceRate;
-        if (sample && !sample->empty())
-            loopEnd = sample->size() - 1;
+        const SampleInfo* p = sample.load(std::memory_order_acquire);
+        if (p) loopEnd = p->data.size() > 0 ? p->data.size() - 1 : 0;
         phase = 0.0;
+        pmPhase = 0.0f;
+        driftState = 0.0f;
     }
+
 
     void setFrequency(double targetFreq, double rootFreq) {
         if (!sample || srIn <= 0.0) return;
@@ -182,41 +196,132 @@ public:
         looping = enabled;
     }
 
+    void setPmMode(int m) {
+        switch(m) {
+            case 0:
+                pmShape = PMShape::SoftSine;
+                break;
+            case 1:
+                pmShape = PMShape::Triangle;
+                break;
+            case 2:
+                pmShape = PMShape::Drift;
+                break;
+        }
+    }
+
+    inline float tanh_fast(float x) {
+        float x2 = x * x;
+        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    }
+
+    inline float smoothPM(float x, float cutoff = 0.15f) {
+        pm_s1 += cutoff * (x - pm_s1);
+        pm_s2 += cutoff * (pm_s1 - pm_s2);
+        return pm_s2;
+    }
+
+    inline float pmSoftSine(float p) {
+        return tanh_fast(1.5f * sinf(p * 2.0f * M_PI));
+    }
+
+    inline float saturatePM(float x) {
+        return tanh_fast(x * 0.5f) * (float)M_PI;
+    }
+
+    inline float pmTriangle(float p) {
+        float t = p - floorf(p);
+        float tri = (t < 0.5f) ? (t * 4.0f - 1.0f) : ((1.0f - t) * 4.0f - 1.0f);
+        return tri;
+    }
+
+    inline float pmDrift(float p, float d) {
+        float noise = (float(rand()) / float(RAND_MAX)) * 2.0f - 1.0f;
+        driftState = driftCoeff * driftState + (1.0f - driftCoeff) * noise;
+        float phaseMod = sinf(p * 2.0f * M_PI);
+        float mixed = driftState + phaseMod * (d * 0.25f);
+        return mixed;
+    }
+
+    inline float pmJuno(float pmPhase, float pmDepth) {
+        float noise = ((float(rand()) / float(RAND_MAX)) * 2.0f - 1.0f);
+        driftState = driftCoeff * driftState + (1.0f - driftCoeff) * noise;
+        float trend = sinf(pmPhase * 2.0f * M_PI) * pmDepth * 0.1f;
+        driftState += trend;
+        driftState *= 0.9995f;
+        return driftState;
+    }
+
     void reset() { phase = 0.0; }
 
     float process() {
-        if (!sample || sample->empty()) return 0.0f;
+        const SampleInfo* p = sample.load(std::memory_order_acquire);
+        if (!p || p->data.empty())
+            return 0.0f;
 
-        const auto& s = *sample;
+        const auto& s = p->data;
         const size_t size = s.size();
+        if (size == 0) return 0.0f;
+        float pm = 0.0f;
 
-        size_t i0 = static_cast<size_t>(phase);
+        if (pmFreq > 0.01f && pmDepthNorm > 0.0f) {
+            pmPhase += pmFreq / srOut;
+            if (pmPhase >= 1.0f) pmPhase -= 1.0f;
+            float pmDepth = pmDepthNorm * pmDepthSamplesMax;
+            float rawPM = 0.0f;
+            switch(pmShape) {
+                case PMShape::SoftSine:
+                    rawPM = pmSoftSine(pmPhase) * pmDepth;
+                    break;
+                case PMShape::Triangle:
+                    rawPM = pmTriangle(pmPhase) * pmDepth;
+                    break;
+                case PMShape::Drift:
+                    rawPM = pmDrift(pmPhase, pmDepth);
+                    break;
+                case PMShape::Juno:
+                    rawPM = pmJuno(pmPhase, pmDepth);
+                    break;
+            }
+            float mod = smoothPM(rawPM);
+            pm = saturatePM(mod);
+        }
+        double readPos = phase + pm;
+
+        if (looping) {
+            double loopLen = std::max(1.0, (double)(loopEnd - loopStart));
+            while (readPos <  loopStart) readPos += loopLen;
+            while (readPos >= loopEnd)   readPos -= loopLen;
+        } else {
+            readPos = std::clamp(readPos, 0.0, (double)size - 1.0);
+        }
+
+        size_t i0 = (size_t)readPos;
         size_t i1 = std::min(i0 + 1, size - 1);
-        i0 = std::clamp<size_t>(i0, 0, s.size() -1);
-        i1 = std::clamp<size_t>(i1, 0, s.size() -1);
-        double frac = phase - (double)i0;
-
-        float val = static_cast<float>(s[i0] + frac * (s[i1] - s[i0]));
-
+        float frac = readPos - (double)i0;
+        float val = s[i0] + frac * (s[i1] - s[i0]);
         phase += phaseInc;
 
         if (looping) {
-            if (phase >= loopEnd) {
-                phase = loopStart + std::fmod(phase - loopStart, (loopEnd - loopStart));
-            }
+            if (phase >= loopEnd)
+                phase = loopStart + std::fmod(phase - loopStart, loopEnd - loopStart);
         } else {
-            if (phase >= size)
-                return 0.0f; // end of sample
+            if (phase >= size) 
+                return 0.0f;
         }
 
         return val;
     }
 
     void processSave(int duration, std::vector<float>& abuf) {
-        if (!sample || sample->empty()) return ;
-        int roll = duration;
-        const auto& s = *sample;
+        const SampleInfo* p = sample.load(std::memory_order_acquire);
+        if (!p || p->data.empty())
+            return;
+
+        const auto& s = p->data;
         const size_t size = s.size();
+        if (size == 0) return;
+        int roll = duration;
 
         while(roll > 0) {
             size_t i0 = static_cast<size_t>(phase);
@@ -245,14 +350,23 @@ public:
     }
 
 private:
+    enum class PMShape {
+        SoftSine,
+        Triangle,
+        Drift,
+        Juno
+    };
+
+    PMShape pmShape = PMShape::SoftSine;
     double srIn = 44100.0;
     double srOut = 44100.0;
     double phase = 0.0;
     double phaseInc = 0.0;
+    float driftState = 0.0f;
+    float driftCoeff = 0.995f;
     size_t loopStart;
     size_t loopEnd;
     bool looping;
-    const std::vector<float>* sample = nullptr;
 };
 
 /****************************************************************
@@ -324,6 +438,12 @@ public:
 
     void setRelease(float r) {env.setRelease(r);}
 
+    void setPmFreq(float f) {player.pmFreq = f;}
+
+    void setPmDepth(float d) {player.pmDepthNorm = d;}
+
+    void setPmMode(int m) {player.setPmMode(m);}
+
     void setRootFreq(float freq_) {freq = freq_;}
 
     void setCutoff(int value) {
@@ -345,7 +465,7 @@ public:
     }
 
     void noteOn(int midiNote, float velocity,
-                const std::vector<float>* sampleData,
+                std::shared_ptr<const SampleInfo> sampleData,
                 double sourceRate, double rootFreq, bool looping = true) {
 
         this->midiNote = midiNote;
@@ -353,7 +473,7 @@ public:
         vel = velocity;
         player.setSample(sampleData, sourceRate);
         player.setFrequency(midiToFreq(midiNote), rootFreq);
-        player.setLoop(0, sampleData->size() - 1, looping);
+        player.setLoop(0, sampleData->data.size() - 1, looping);
         player.reset();
         recalcFilter();
         filter.reset();
@@ -369,6 +489,7 @@ public:
     void noteOff() {
         if (active) {
             env.noteOff();
+            active = false;
         }
     }
 
@@ -381,12 +502,12 @@ public:
     }
 
     void getAnalyseBuffer(float *abuf, int frames,
-                        const std::vector<float>* sampleData,
+                        std::shared_ptr<const SampleInfo> sampleData,
                         double sourceRate, double rootFreq) {
 
         player.setSample(sampleData, sourceRate);
         player.setFrequency(440.0, rootFreq);
-        player.setLoop(0, sampleData->size() - 1, true);
+        player.setLoop(0, sampleData->data.size() - 1, true);
         player.reset();
         for (int i = 0; i < frames; i++) {
             abuf[i] = player.process();
@@ -394,12 +515,12 @@ public:
     }
 
     void getSaveBuffer(bool loop, std::vector<float>& abuf, uint8_t rootKey, int duration,
-                        const std::vector<float>* sampleData,
+                        std::shared_ptr<const SampleInfo> sampleData,
                         double sourceRate, double rootFreq) {
 
         player.setSample(sampleData, sourceRate);
         player.setFrequency(midiToFreq(rootKey), rootFreq);
-        player.setLoop(0, sampleData->size() - 1, loop);
+        player.setLoop(0, sampleData->data.size() - 1, loop);
         player.reset();
         player.processSave(duration, abuf);
         for (uint32_t i = 0; i < abuf.size(); i++) {
@@ -423,6 +544,8 @@ private:
     int ccCutoff = 127;
     int ccReso = 0;
     float keyTracking = 0.5f;
+    double pmFreq = 0.0;
+    double pmDepth = 0.0;
 
     const float minFreq = 20.0;
     const float maxFreq = 20000.0;
@@ -477,14 +600,18 @@ class PolySynth {
 public:
     PolySynth() {}
 
-    void init(double sr, int maxVoices = 8) {
-        voices.resize(maxVoices);
+    void init(double sr, size_t maxVoices = 8) {
+        //voices.resize(maxVoices);
+        voices.clear();
+        voices.reserve(maxVoices);
+        for (size_t i = 0; i < maxVoices; ++i)
+            voices.push_back(std::make_unique<SampleVoice>());
         sampleRate = sr; 
         masterGain = (1.0f / std::sqrt((float)maxVoices));
         playLoop = false;
         for (auto& v : voices) {
-            v.setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
-            v.setSampleRate(sr);
+            v->setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
+            v->setSampleRate(sr);
         }
     }
 
@@ -496,94 +623,112 @@ public:
 
     void getAnalyseBuffer(float *abuf, int frames) {
         const auto s = loopBank->getSample(0);
-        voices[voices.size() - 1].getAnalyseBuffer(abuf, frames, &s->data, s->sourceRate, s->rootFreq);
+        voices[voices.size() - 1]->getAnalyseBuffer(abuf, frames, s, s->sourceRate, s->rootFreq);
     }
 
     void getSaveBuffer(bool loop, std::vector<float>& abuf, uint8_t rootKey, uint32_t duration) {
         auto s = sampleBank->getSample(0);
         if (loop) s = loopBank->getSample(0);
-        voices[voices.size() - 1].getSaveBuffer(loop, abuf, rootKey, duration, &s->data, s->sourceRate, s->rootFreq);
+        voices[voices.size() - 1]->getSaveBuffer(loop, abuf, rootKey, duration, s, s->sourceRate, s->rootFreq);
     }
 
     void setAttack(float a) {
         for (auto& v : voices) {
-            v.setAttack(a);
+            v->setAttack(a);
         }
     }
 
     void setDecay(float d) {
         for (auto& v : voices) {
-            v.setDecay(d);
+            v->setDecay(d);
         }
     }
 
     void setSustain(float s) {
         for (auto& v : voices) {
-            v.setSustain(s);
+            v->setSustain(s);
         }
     }
 
     void setRelease(float r) {
         for (auto& v : voices) {
-            v.setRelease(r);
+            v->setRelease(r);
         }
     }
 
     void setRootFreq(float freq) {
         for (auto& v : voices) {
-            v.setRootFreq(freq);
+            v->setRootFreq(freq);
         }
     }
 
     void setCutoff(int value) {
         for (auto& v : voices) {
-            v.setCutoff(value);
+            v->setCutoff(value);
         }
     }
 
     void setReso(int value) {
         for (auto& v : voices) {
-            v.setReso(value);
+            v->setReso(value);
         }
     }
 
     void setKeyTracking(float amt) {
         float value = std::clamp(amt, 0.0f, 1.0f);
         for (auto& v : voices) {
-            v.setKeyTracking(value);
+            v->setKeyTracking(value);
+        }
+    }
+
+    void setPmFreq(float f) {
+        for (auto& v : voices) {
+            v->setPmFreq(f);
+        }
+    }
+
+    void setPmDepth(float d) {
+        for (auto& v : voices) {
+            v->setPmDepth(d);
+        }
+    }
+
+    void setPmMode(int m) {
+        for (auto& v : voices) {
+            v->setPmMode(m);
         }
     }
 
     void noteOn(int midiNote, float velocity, size_t sampleIndex = 0) {
         if (playLoop ? !loopBank : !sampleBank) return;
-        const auto* s = playLoop ? loopBank->getSample(sampleIndex) : sampleBank->getSample(sampleIndex);
+        const auto s = playLoop ? loopBank->getSample(sampleIndex) : sampleBank->getSample(sampleIndex);
         if (!s) return;
 
         // Find free voice
         for (auto& v : voices) {
-            if (!v.isActive()) {
-                v.noteOn(midiNote, velocity, &s->data, s->sourceRate, s->rootFreq, playLoop);
+            if (!v->isActive()) {
+                v->noteOn(midiNote, velocity, s, s->sourceRate, s->rootFreq, playLoop);
                 return;
             }
         }
 
         // steal voice (simple)
-        voices[0].noteOn(midiNote, velocity, &s->data, s->sourceRate, s->rootFreq, playLoop);
+        voices[0]->noteOn(midiNote, velocity, s, s->sourceRate, s->rootFreq, playLoop);
     }
 
     void noteOff(int midiNote) {
-        for (auto& v : voices) v.noteOff(midiNote);
+        for (auto& v : voices) v->noteOff(midiNote);
     }
 
     void allNoteOff() {
-        for (auto& v : voices) v.noteOff();
+        for (auto& v : voices) v->noteOff();
     }
 
     float process() {
         float mix = 0.0f;
         for (auto& v : voices) {
-            if (v.isActive()) {
-                mix += v.process();
+            if (v->isActive()) {
+                mix += v->process();
             }
         }
         // avoid clipping
@@ -592,7 +737,7 @@ public:
     }
 
 private:
-    std::vector<SampleVoice> voices;
+    std::vector<std::unique_ptr<SampleVoice>> voices;
     const SampleBank* sampleBank = nullptr;
     const SampleBank* loopBank = nullptr;
     double sampleRate;

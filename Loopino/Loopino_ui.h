@@ -75,9 +75,9 @@ public:
     std::vector<float> sampleBufferSave;
 
     SampleBank sbank;
-    SampleInfo sampleData;
+    std::shared_ptr<SampleInfo> sampleData { nullptr };;
     SampleBank lbank;
-    SampleInfo loopData;
+    std::shared_ptr<SampleInfo> loopData { nullptr };;
 
     uint32_t jack_sr;
     uint32_t position;
@@ -114,6 +114,8 @@ public:
     bool record;
 
     Loopino() : af() {
+        sampleData = std::make_shared<SampleInfo>();
+        loopData = std::make_shared<SampleInfo>();
         jack_sr = 0;
         position = 0;
         loopPoint_l = 0;
@@ -154,6 +156,9 @@ public:
         sharp = 0.0f;
         saw = 0.0f;
         fadeout = 0.0f;
+        pmfreq = 0.1f;
+        pmdepth = 0.0f;
+        pmmode = 0;
         useLoop = 0;
         timer = 30;
         generateKeys();
@@ -252,7 +257,7 @@ public:
     void createGUI(Xputty *app) {
         #ifndef RUN_AS_PLUGIN
         set_custom_theme(app);
-        w_top = create_window(app, os_get_root_window(app, IS_WINDOW), 0, 0, 880, 290);
+        w_top = create_window(app, os_get_root_window(app, IS_WINDOW), 0, 0, 880, 390);
         widget_set_title(w_top, "loopino");
         widget_set_icon_from_png(w_top,LDVAR(loopino_png));
         #endif
@@ -264,9 +269,9 @@ public:
         w_top->func.dnd_notify_callback = dnd_load_response;
         w_top->func.resize_notify_callback = resize_callback;
         commonWidgetSettings(w_top);
-        os_set_window_min_size(w_top, 798, 190, 880, 290);
+        os_set_window_min_size(w_top, 798, 290, 880, 390);
 
-        w = create_widget(app, w_top, 0, 0, 440, 210);
+        w = create_widget(app, w_top, 0, 0, 440, 310);
         w->parent = w_top;
         w->scale.gravity = NORTCENTER;
         w->func.expose_callback = draw_window;
@@ -302,7 +307,7 @@ public:
         wview->func.button_release_callback = set_playhead;
         commonWidgetSettings(wview);
 
-        lw = create_widget(app, w_top, 440, 0, 440, 210);
+        lw = create_widget(app, w_top, 440, 0, 440, 310);
         lw->parent = w_top;
         lw->scale.gravity = NORTCENTER;
         lw->func.expose_callback = draw_window;
@@ -316,7 +321,12 @@ public:
         loopview->func.button_release_callback = set_playhead;
         commonWidgetSettings(loopview);
 
-        filebutton = add_file_button(w, 20, 158, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
+        Widget_t* frame = add_frame(w, "Sample Buffer", 10, 145, 425, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        filebutton = add_file_button(frame, 20, 20, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
         filebutton->scale.gravity = SOUTHEAST;
         widget_get_png(filebutton, LDVAR(load__png));
         filebutton->flags |= HAS_TOOLTIP;
@@ -324,92 +334,7 @@ public:
         filebutton->func.user_callback = dialog_response;
         commonWidgetSettings(filebutton);
 
-        Attack = add_knob(w, "Attack",60,155,38,38);
-        Attack->scale.gravity = SOUTHWEST;
-        Attack->flags |= HAS_TOOLTIP;
-        add_tooltip(Attack, "Attack");
-        set_adjustment(Attack->adj, 0.01, 0.01, 0.001, 5.0, 0.01, CL_LOGARITHMIC);
-        set_widget_color(Attack, (Color_state)1, (Color_mod)2, 0.894, 0.106, 0.623, 1.0);
-        Attack->func.expose_callback = draw_knob;
-        Attack->func.value_changed_callback = attack_callback;
-        commonWidgetSettings(Attack);
-
-        Decay = add_knob(w, "Decay",100,155,38,38);
-        Decay->scale.gravity = SOUTHWEST;
-        Decay->flags |= HAS_TOOLTIP;
-        add_tooltip(Decay, "Decay");
-        set_adjustment(Decay->adj, 0.1, 0.1, 0.005, 5.0, 0.01, CL_LOGARITHMIC);
-        set_widget_color(Decay, (Color_state)1, (Color_mod)2, 0.902, 0.098, 0.117, 1.0);
-        Decay->func.expose_callback = draw_knob;
-        Decay->func.value_changed_callback = decay_callback;
-        commonWidgetSettings(Decay);
-
-        Sustain = add_knob(w, "Sustain",140,155,38,38);
-        Sustain->scale.gravity = SOUTHWEST;
-        Sustain->flags |= HAS_TOOLTIP;
-        add_tooltip(Sustain, "Sustain");
-        set_adjustment(Sustain->adj, 0.8, 0.8, 0.001, 1.0, 0.01, CL_CONTINUOS);
-        set_widget_color(Sustain, (Color_state)1, (Color_mod)2, 0.377, 0.898, 0.109, 1.0);
-        Sustain->func.expose_callback = draw_knob;
-        Sustain->func.value_changed_callback = sustain_callback;
-        commonWidgetSettings(Sustain);
-
-        Release = add_knob(w, "Release",180,155,38,38);
-        Release->scale.gravity = SOUTHWEST;
-        Release->flags |= HAS_TOOLTIP;
-        add_tooltip(Release, "Release");
-        set_adjustment(Release->adj, 0.3, 0.3, 0.005, 10.0, 0.01, CL_LOGARITHMIC);
-        set_widget_color(Release, (Color_state)1, (Color_mod)2, 0.486, 0.106, 0.894, 1.0);
-        Release->func.expose_callback = draw_knob;
-        Release->func.value_changed_callback = release_callback;
-        commonWidgetSettings(Release);
-
-        Frequency = add_valuedisplay(w, _(" Hz"), 220, 160, 60, 30);
-        set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
-        Frequency->scale.gravity = SOUTHWEST;
-        Frequency->flags |= HAS_TOOLTIP;
-        add_tooltip(Frequency, "Synth Root Frequency");
-        Frequency->func.value_changed_callback = frequency_callback;
-        commonWidgetSettings(Frequency);
-
-        Resonance = add_knob(w, "Resonance",285,155,38,38);
-        Resonance->scale.gravity = SOUTHWEST;
-        Resonance->flags |= HAS_TOOLTIP;
-        add_tooltip(Resonance, "Resonance");
-        set_adjustment(Resonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
-        set_widget_color(Resonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
-        Resonance->func.expose_callback = draw_knob;
-        Resonance->func.value_changed_callback = resonance_callback;
-        commonWidgetSettings(Resonance);
-
-        CutOff = add_knob(w, "CutOff",325,155,38,38);
-        CutOff->scale.gravity = SOUTHWEST;
-        CutOff->flags |= HAS_TOOLTIP;
-        add_tooltip(CutOff, "CutOff");
-        set_adjustment(CutOff->adj, 127.0, 127.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
-        set_widget_color(CutOff, (Color_state)1, (Color_mod)2, 0.1, 0.78, 0.85, 1.0);
-        CutOff->func.expose_callback = draw_knob;
-        CutOff->func.value_changed_callback = cutoff_callback;
-        commonWidgetSettings(CutOff);
-
-        clip = add_button(w, "", 365, 158, 35, 35);
-        clip->scale.gravity = SOUTHWEST;
-        widget_get_png(clip, LDVAR(clip__png));
-        clip->flags |= HAS_TOOLTIP;
-        add_tooltip(clip, "Clip Sample to clip marks");
-        clip->func.value_changed_callback = button_clip_callback;
-        commonWidgetSettings(clip);
-
-        playbutton = add_image_toggle_button(w, "", 400, 158, 35, 35);
-        playbutton->scale.gravity = SOUTHWEST;
-        widget_get_png(playbutton, LDVAR(play_png));
-        playbutton->flags |= HAS_TOOLTIP;
-        add_tooltip(playbutton, "Play Sample");
-        playbutton->func.value_changed_callback = button_playbutton_callback;
-        commonWidgetSettings(playbutton);
-
-
-        Presets = add_button(lw, "", 0, 158, 35, 35);
+        Presets = add_button(frame, "", 60, 20, 35, 35);
         Presets->scale.gravity = SOUTHWEST;
         widget_get_png(Presets, LDVAR(presets_png));
         Presets->flags |= HAS_TOOLTIP;
@@ -417,27 +342,7 @@ public:
         Presets->func.value_changed_callback = presets_callback;
         commonWidgetSettings(Presets);
 
-        Sharp = add_knob(lw, "Sharp",40,155,38,38);
-        Sharp->scale.gravity = SOUTHWEST;
-        Sharp->flags |= HAS_TOOLTIP;
-        add_tooltip(Sharp, "Square");
-        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
-        set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
-        Sharp->func.expose_callback = draw_knob;
-        Sharp->func.value_changed_callback = sharp_callback;
-        commonWidgetSettings(Sharp);
-
-        Saw = add_knob(lw, "Saw",80,155,38,38);
-        Saw->scale.gravity = SOUTHWEST;
-        Saw->flags |= HAS_TOOLTIP;
-        add_tooltip(Saw, "Saw Tooth");
-        set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
-        set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
-        Saw->func.expose_callback = draw_knob;
-        Saw->func.value_changed_callback = saw_callback;
-        commonWidgetSettings(Saw);
-
-        FadeOut = add_knob(lw, "FadeOut",120,155,38,38);
+        FadeOut = add_knob(frame, "FadeOut",230,18,38,38);
         FadeOut->scale.gravity = SOUTHWEST;
         FadeOut->flags |= HAS_TOOLTIP;
         add_tooltip(FadeOut, "Fade Out Samplebuffer");
@@ -447,7 +352,46 @@ public:
         FadeOut->func.value_changed_callback = fade_callback;
         commonWidgetSettings(FadeOut);
 
-        setLoopSize = add_knob(lw, "S",160,155,38,38);
+        clip = add_button(frame, "", 290, 20, 35, 35);
+        clip->scale.gravity = SOUTHWEST;
+        widget_get_png(clip, LDVAR(clip__png));
+        clip->flags |= HAS_TOOLTIP;
+        add_tooltip(clip, "Clip Sample to clip marks");
+        clip->func.value_changed_callback = button_clip_callback;
+        commonWidgetSettings(clip);
+
+        playbutton = add_image_toggle_button(frame, "", 330, 20, 35, 35);
+        playbutton->scale.gravity = SOUTHWEST;
+        widget_get_png(playbutton, LDVAR(play_png));
+        playbutton->flags |= HAS_TOOLTIP;
+        add_tooltip(playbutton, "Play Sample");
+        playbutton->func.value_changed_callback = button_playbutton_callback;
+        commonWidgetSettings(playbutton);
+
+        #ifndef RUN_AS_PLUGIN
+        Record = add_image_toggle_button(frame, "", 370, 20, 35, 35);
+        Record->scale.gravity = SOUTHWEST;
+        widget_get_png(Record, LDVAR(record_png));
+        Record->flags |= HAS_TOOLTIP;
+        add_tooltip(Record, "Record Sample");
+        Record->func.value_changed_callback = button_record_callback;
+        commonWidgetSettings(Record);
+        #endif
+
+        frame = add_frame(lw, "Loop Buffer", 2, 145, 428, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        setLoop = add_image_toggle_button(frame, "", 20, 20, 35, 35);
+        setLoop->scale.gravity = SOUTHWEST;
+        widget_get_png(setLoop, LDVAR(loop_png));
+        setLoop->flags |= HAS_TOOLTIP;
+        add_tooltip(setLoop, "Use Loop Sample");
+        setLoop->func.value_changed_callback = button_set_callback;
+        commonWidgetSettings(setLoop);
+
+        setLoopSize = add_knob(frame, "S",275,18,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
         setLoopSize->flags |= HAS_TOOLTIP;
         add_tooltip(setLoopSize, "Loop Periods");
@@ -456,29 +400,185 @@ public:
         setLoopSize->func.value_changed_callback = setLoopSize_callback;
         commonWidgetSettings(setLoopSize);
 
-        setPrevLoop = add_button(lw, "<", 200, 158, 35, 35);
+        setPrevLoop = add_button(frame, "<", 325, 20, 35, 35);
         setPrevLoop->scale.gravity = SOUTHWEST;
         setPrevLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setPrevLoop, "Load previous loop");
         setPrevLoop->func.value_changed_callback = setPrevLoop_callback;
         commonWidgetSettings(setPrevLoop);
 
-        setNextLoop = add_button(lw, ">", 235, 158, 35, 35);
+        setNextLoop = add_button(frame, ">", 365, 20, 35, 35);
         setNextLoop->scale.gravity = SOUTHWEST;
         setNextLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
         commonWidgetSettings(setNextLoop);
 
-        setLoop = add_image_toggle_button(lw, "", 270, 158, 35, 35);
-        setLoop->scale.gravity = SOUTHWEST;
-        widget_get_png(setLoop, LDVAR(loop_png));
-        setLoop->flags |= HAS_TOOLTIP;
-        add_tooltip(setLoop, "Use Loop Sample");
-        setLoop->func.value_changed_callback = button_set_callback;
-        commonWidgetSettings(setLoop);
+        frame = add_frame(w, "ADSR", 10, 230, 190, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
 
-        Volume = add_knob(lw, "dB",305,155,38,38);
+        Attack = add_knob(frame, "Attack",15,20,38,38);
+        Attack->scale.gravity = SOUTHWEST;
+        Attack->flags |= HAS_TOOLTIP;
+        add_tooltip(Attack, "Attack");
+        set_adjustment(Attack->adj, 0.01, 0.01, 0.001, 5.0, 0.01, CL_LOGARITHMIC);
+        set_widget_color(Attack, (Color_state)1, (Color_mod)2, 0.894, 0.106, 0.623, 1.0);
+        Attack->func.expose_callback = draw_knob;
+        Attack->func.value_changed_callback = attack_callback;
+        commonWidgetSettings(Attack);
+
+        Decay = add_knob(frame, "Decay",55,20,38,38);
+        Decay->scale.gravity = SOUTHWEST;
+        Decay->flags |= HAS_TOOLTIP;
+        add_tooltip(Decay, "Decay");
+        set_adjustment(Decay->adj, 0.1, 0.1, 0.005, 5.0, 0.01, CL_LOGARITHMIC);
+        set_widget_color(Decay, (Color_state)1, (Color_mod)2, 0.902, 0.098, 0.117, 1.0);
+        Decay->func.expose_callback = draw_knob;
+        Decay->func.value_changed_callback = decay_callback;
+        commonWidgetSettings(Decay);
+
+        Sustain = add_knob(frame, "Sustain",95,20,38,38);
+        Sustain->scale.gravity = SOUTHWEST;
+        Sustain->flags |= HAS_TOOLTIP;
+        add_tooltip(Sustain, "Sustain");
+        set_adjustment(Sustain->adj, 0.8, 0.8, 0.001, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Sustain, (Color_state)1, (Color_mod)2, 0.377, 0.898, 0.109, 1.0);
+        Sustain->func.expose_callback = draw_knob;
+        Sustain->func.value_changed_callback = sustain_callback;
+        commonWidgetSettings(Sustain);
+
+        Release = add_knob(frame, "Release",135,20,38,38);
+        Release->scale.gravity = SOUTHWEST;
+        Release->flags |= HAS_TOOLTIP;
+        add_tooltip(Release, "Release");
+        set_adjustment(Release->adj, 0.3, 0.3, 0.005, 10.0, 0.01, CL_LOGARITHMIC);
+        set_widget_color(Release, (Color_state)1, (Color_mod)2, 0.486, 0.106, 0.894, 1.0);
+        Release->func.expose_callback = draw_knob;
+        Release->func.value_changed_callback = release_callback;
+        commonWidgetSettings(Release);
+
+        frame = add_frame(w, "Filter", 205, 230, 110, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Resonance = add_knob(frame, "Resonance",15,20,38,38);
+        Resonance->scale.gravity = SOUTHWEST;
+        Resonance->flags |= HAS_TOOLTIP;
+        add_tooltip(Resonance, "Resonance");
+        set_adjustment(Resonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(Resonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
+        Resonance->func.expose_callback = draw_knob;
+        Resonance->func.value_changed_callback = resonance_callback;
+        commonWidgetSettings(Resonance);
+
+        CutOff = add_knob(frame, "CutOff",55,20,38,38);
+        CutOff->scale.gravity = SOUTHWEST;
+        CutOff->flags |= HAS_TOOLTIP;
+        add_tooltip(CutOff, "CutOff");
+        set_adjustment(CutOff->adj, 127.0, 127.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(CutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
+        CutOff->func.expose_callback = draw_knob;
+        CutOff->func.value_changed_callback = cutoff_callback;
+        commonWidgetSettings(CutOff);
+
+        frame = add_frame(w, "Synth Freq", 320, 230, 115, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Frequency = add_valuedisplay(frame, _(" Hz"), 22, 25, 70, 30);
+        set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
+        Frequency->scale.gravity = SOUTHWEST;
+        Frequency->flags |= HAS_TOOLTIP;
+        add_tooltip(Frequency, "Synth Root Frequency");
+        Frequency->func.value_changed_callback = frequency_callback;
+        commonWidgetSettings(Frequency);
+
+        frame = add_frame(lw, "Phase Modulator", 2, 230, 163, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        PmMode[0] = add_check_box(frame,"Sine" , 8, 12, 15, 15);
+        PmMode[0]->flags |= IS_RADIO;
+        set_widget_color(PmMode[0], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        commonWidgetSettings(PmMode[0]);
+        PmMode[0]->func.value_changed_callback = radio_box_button_pressed;
+
+        PmMode[1] = add_check_box(frame,"Triangle" , 8, 27, 15, 15);
+        PmMode[1]->flags |= IS_RADIO;
+        set_widget_color(PmMode[1], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        commonWidgetSettings(PmMode[1]);
+        PmMode[1]->func.value_changed_callback = radio_box_button_pressed;
+
+        PmMode[2] = add_check_box(frame,"Noise" , 8, 42, 15, 15);
+        PmMode[2]->flags |= IS_RADIO;
+        commonWidgetSettings(PmMode[2]);
+        set_widget_color(PmMode[2], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        PmMode[2]->func.value_changed_callback = radio_box_button_pressed;
+        radio_box_set_active(PmMode[pmmode]);
+
+        PmMode[3] = add_check_box(frame,"Juno" , 8, 57, 15, 15);
+        PmMode[3]->flags |= IS_RADIO;
+        commonWidgetSettings(PmMode[3]);
+        set_widget_color(PmMode[3], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        PmMode[3]->func.value_changed_callback = radio_box_button_pressed;
+        radio_box_set_active(PmMode[pmmode]);
+
+        PmFreq = add_knob(frame, "Freq",73,20,38,38);
+        PmFreq->scale.gravity = SOUTHWEST;
+        PmFreq->flags |= HAS_TOOLTIP;
+        add_tooltip(PmFreq, "Freq");
+        set_adjustment(PmFreq->adj, 0.01, 0.01, 0.01, 200.0, 0.01, CL_LOGARITHMIC);
+        set_widget_color(PmFreq, (Color_state)1, (Color_mod)2, 0.60, 0.80, 1.00, 1.0);
+        PmFreq->func.expose_callback = draw_knob;
+        PmFreq->func.value_changed_callback = pmfreq_callback;
+        commonWidgetSettings(PmFreq);
+
+        PmDepth = add_knob(frame, "Depth",113,20,38,38);
+        PmDepth->scale.gravity = SOUTHWEST;
+        PmDepth->flags |= HAS_TOOLTIP;
+        add_tooltip(PmDepth, "Depth");
+        set_adjustment(PmDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(PmDepth, (Color_state)1, (Color_mod)2, 0.55, 0.95, 0.80, 1.0);
+        PmDepth->func.expose_callback = draw_knob;
+        PmDepth->func.value_changed_callback = pmdepth_callback;
+        commonWidgetSettings(PmDepth);
+
+        frame = add_frame(lw, "Sharp", 170, 230, 110, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Sharp = add_knob(frame, "Square",15,20,38,38);
+        Sharp->scale.gravity = SOUTHWEST;
+        Sharp->flags |= HAS_TOOLTIP;
+        add_tooltip(Sharp, "Square");
+        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
+        Sharp->func.expose_callback = draw_knob;
+        Sharp->func.value_changed_callback = sharp_callback;
+        commonWidgetSettings(Sharp);
+
+        Saw = add_knob(frame, "Saw",55,20,38,38);
+        Saw->scale.gravity = SOUTHWEST;
+        Saw->flags |= HAS_TOOLTIP;
+        add_tooltip(Saw, "Saw Tooth");
+        set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
+        Saw->func.expose_callback = draw_knob;
+        Saw->func.value_changed_callback = saw_callback;
+        commonWidgetSettings(Saw);
+
+        frame = add_frame(lw, "Gain", 285, 230, 70, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Volume = add_knob(frame, "dB",16,20,38,38);
         Volume->scale.gravity = SOUTHWEST;
         Volume->flags |= HAS_TOOLTIP;
         add_tooltip(Volume, "Volume (dB)");
@@ -489,15 +589,12 @@ public:
         commonWidgetSettings(Volume);
 
         #ifndef RUN_AS_PLUGIN
-        Record = add_image_toggle_button(lw, "", 350, 158, 35, 35);
-        Record->scale.gravity = SOUTHWEST;
-        widget_get_png(Record, LDVAR(record_png));
-        Record->flags |= HAS_TOOLTIP;
-        add_tooltip(Record, "Record Sample");
-        Record->func.value_changed_callback = button_record_callback;
-        commonWidgetSettings(Record);
+        frame = add_frame(lw, "Exit", 360, 230, 70, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
 
-        w_quit = add_button(lw, "", 390, 158, 35, 35);
+        w_quit = add_button(frame, "", 18, 20, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
         w_quit->scale.gravity = SOUTHWEST;
         w_quit->flags |= HAS_TOOLTIP;
@@ -506,7 +603,7 @@ public:
         commonWidgetSettings(w_quit);
         #endif
 
-        keyboard = add_midi_keyboard(w_top, "Organ", 0, 210, 880, 80);
+        keyboard = add_midi_keyboard(w_top, "Organ", 0, 310, 880, 80);
         keyboard->flags |= HIDE_ON_DELETE;
         //keyboard->scale.gravity = SOUTHCENTER;
         keyboard->parent_struct = (void*)this;
@@ -558,6 +655,9 @@ private:
     Widget_t *Sharp;
     Widget_t *Saw;
     Widget_t *FadeOut;
+    Widget_t *PmFreq;
+    Widget_t *PmDepth;
+    Widget_t *PmMode[4];
 
     Window    p;
 
@@ -587,6 +687,9 @@ private:
     float sharp;
     float saw;
     float fadeout;
+    float pmfreq;
+    float pmdepth;
+    int pmmode;
     int useLoop;
     
     float *analyseBuffer;
@@ -686,22 +789,22 @@ private:
 ****************************************************************/
 
     void process_fadeout(std::vector<float>& buffer) {
-        if (buffer.empty()) return;
-        if (fadeout <= 0.0001f) return;
+        if (buffer.empty() || fadeout <= 0.0f) return;
+
         const size_t N = buffer.size();
-        const float f = fadeout * 2.0f;
-        const float duration = N / jack_sr / f;
-        for (size_t i = 0; i < N; ++i) {
-            float t = (float)i / jack_sr;
-            float fade = 1.0f;
-            float fadeStart = duration - 2.0f;
-            if (t > fadeStart) {
-                float x = (t - fadeStart) / 2.0f;
-                fade = expf(-3.0f * x);
-            }
-            buffer[i] *= fade;
+        const float maxFraction = 5.0f / 6.0f;
+        size_t fadeSamples = size_t(maxFraction * fadeout * N);
+        if (fadeSamples < 1) return;
+        size_t start = N - fadeSamples;
+
+        for (size_t i = start; i < N; ++i)
+        {
+            float t = float(i - start) / float(fadeSamples);
+            float gain = std::exp(-3.0f * t);
+            buffer[i] *= gain;
         }
     }
+
 
     void process_saw(std::vector<float>& buffer) {
         if (buffer.empty()) return;
@@ -820,12 +923,13 @@ private:
 
     void setOneShootBank() {
         if (!sampleBuffer.size()) return;
+        if (!sampleData) sampleData = std::make_shared<SampleInfo>();
         getPitch();
-        sbank.clear();
-        sampleData.data = sampleBuffer;
-        sampleData.sourceRate = (double)jack_sr;
-        sampleData.rootFreq = (double) freq;
-        sbank.addSample(sampleData);
+        //sbank.clear();
+        sampleData->data = sampleBuffer;
+        sampleData->sourceRate = (double)jack_sr;
+        sampleData->rootFreq = (double) freq;
+        sbank.addSample(std::const_pointer_cast<const SampleInfo>(sampleData));
         synth.setBank(&sbank);
     }
 
@@ -853,11 +957,11 @@ private:
 
     void setLoopBank() {
         if (!loopBuffer.size()) return;
-        lbank.clear();
-        loopData.data = loopBuffer;
-        loopData.sourceRate = (double)jack_sr;
-        loopData.rootFreq = (double)freq;
-        lbank.addSample(loopData);
+        if (!loopData) loopData = std::make_shared<SampleInfo>();
+        loopData->data = loopBufferSave;
+        loopData->sourceRate = (double)jack_sr;
+        loopData->rootFreq = (double)freq;
+        lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
         synth.setLoopBank(&lbank);
         memset(analyseBuffer, 0, 40960 * sizeof(float));
         synth.getAnalyseBuffer(analyseBuffer, 40960);
@@ -868,11 +972,11 @@ private:
             loopRootkey = 69;
         }
         double cor = loopFreq / 440.0f;
-        lbank.clear();
-        loopData.data = loopBuffer;
-        loopData.sourceRate = (double)jack_sr;
-        loopData.rootFreq = (double)(freq * cor);
-        lbank.addSample(loopData);
+        //lbank.clear();
+        loopData->data = loopBuffer;
+        loopData->sourceRate = (double)jack_sr;
+        loopData->rootFreq = (double)(freq * cor);
+        lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
         synth.setLoopBank(&lbank);
         if (guiIsCreated) {
             uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
@@ -1255,7 +1359,9 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->loopPeriods = (int)(adj_get_value(w->adj));
         self->markDirty(7);
+        self->synth.allNoteOff();
         if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
+        self->synth.allNoteOff();
     }
 
     // set next Loop
@@ -1528,6 +1634,54 @@ private:
         self->synth.setCutoff((int)self->cutoff);
     }
 
+    // pmfreq control
+    static void pmfreq_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->pmfreq = adj_get_value(w->adj);
+        self->markDirty(13);
+        self->synth.setPmFreq(self->pmfreq);
+    }
+
+    // pmdepth control
+    static void pmdepth_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->pmdepth = adj_get_value(w->adj);
+        self->markDirty(14);
+        self->synth.setPmDepth(self->pmdepth);
+    }
+
+
+    void radio_box_set_active(Widget_t *w) {
+        Widget_t * p = (Widget_t*)w->parent;
+        int response = 0;
+        int i = 0;
+        for(;i<p->childlist->elem;i++) {
+            Widget_t *wid = p->childlist->childs[i];
+            if (wid->adj && wid->flags & IS_RADIO) {
+                if (wid != w) adj_set_value(wid->adj_y, 0.0);
+                else if (wid == w) {
+                    pmmode = response;
+                    markDirty(15);
+                    if (adj_get_value(wid->adj) != 1.0)
+                        adj_set_value(wid->adj, 1.0);
+                    synth.setPmMode(pmmode);
+                }
+                ++response;
+            }
+        }
+    }
+
+    // pmmode control
+    static void radio_box_button_pressed(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        if (w->flags & HAS_FOCUS) {
+            self->radio_box_set_active(w);
+        }
+    }
+
     // volume control
     static void volume_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
@@ -1542,6 +1696,7 @@ private:
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->sharp = adj_get_value(w->adj);
+        self->markDirty(10);
         self->process_sharp();
         self->process_sample_sharp();
         self->setOneShootBank();
@@ -1553,17 +1708,19 @@ private:
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->saw = adj_get_value(w->adj);
+        self->markDirty(11);
         self->process_sharp();
         self->process_sample_sharp();
         self->setOneShootBank();
         self->setLoopToBank();
     }
 
-    // saw control
+    // fade control
     static void fade_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->fadeout = adj_get_value(w->adj);
+        self->markDirty(12);
         self->process_sample_sharp();
         self->setOneShootBank();
     }
@@ -1620,7 +1777,7 @@ private:
             .base   = { 0.000, 0.000, 0.000, 0.400 },
             .text   = { 0.600, 0.600, 0.600, 0.400 },
             .shadow = { 0.000, 0.000, 0.000, 0.200 },
-            .frame  = { 0.100, 0.100, 0.100, 0.400 },
+            .frame  = { 0.250, 0.250, 0.250, 0.600 },
             .light  = { 0.150, 0.150, 0.150, 0.400 }
         };
     }
@@ -1628,6 +1785,55 @@ private:
 /****************************************************************
                       drawings 
 ****************************************************************/
+
+    static void setFrameColour(Widget_t* w, int x, int y, int wi, int h) {
+        Colors *c = get_color_scheme(w, NORMAL_);
+        cairo_pattern_t *pat = cairo_pattern_create_linear (x, y, x, y + h);
+        cairo_pattern_add_color_stop_rgba
+            (pat, 0, c->bg[0]*1.5, c->bg[1]*1.5, c->bg[2]*1.5,1.0);
+        cairo_pattern_add_color_stop_rgba 
+            (pat, 1, c->bg[0]*0.2, c->bg[1]*0.2, c->bg[2]*0.2,1.0);
+        cairo_set_source(w->crb, pat);
+        cairo_pattern_destroy (pat);
+    }
+
+    static void rounded_frame(cairo_t *cr,float x, float y, float w, float h, float lsize) {
+        cairo_new_path (cr);
+        float r = 12.0;
+        cairo_move_to(cr, x+lsize+r,y);
+        cairo_line_to(cr, x+w-r,y);
+        cairo_curve_to(cr, x+w,y,x+w,y,x+w,y+r);
+        cairo_line_to(cr, x+w,y+h-r);
+        cairo_curve_to(cr, x+w,y+h,x+w,y+h,x+w-r,y+h);
+        cairo_line_to(cr, x+r,y+h);
+        cairo_curve_to(cr, x,y+h,x,y+h,x,y+h-r);
+        cairo_line_to(cr, x,y+r);
+        cairo_curve_to(cr, x,y,x,y,x+r,y);
+    }
+
+    static void draw_frame(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        int width_t = metrics.width;
+        int height_t = metrics.height;
+
+        cairo_text_extents_t extents;
+        //use_text_color_scheme(w, get_color_state(w));
+        cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
+        cairo_set_font_size (w->crb, w->app->normal_font/w->scale.ascale);
+        cairo_text_extents(w->crb,"Abc" , &extents);
+        cairo_move_to (w->crb, 22, extents.height);
+        cairo_show_text(w->crb, w->label);
+        cairo_new_path (w->crb);
+
+        cairo_text_extents(w->crb,w->label , &extents);
+        cairo_set_line_width(w->crb,1);
+       // setFrameColour(w, 5, 5, width_t-10, height_t-10);
+        cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
+        rounded_frame(w->crb, 5, 5, width_t-10, height_t-8, extents.width+10);
+        cairo_stroke(w->crb);
+    }
 
     static void draw_slider(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
