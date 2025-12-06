@@ -587,25 +587,25 @@ public:
         PmMode[3]->func.value_changed_callback = radio_box_button_pressed;
         radio_box_set_active(PmMode[pmmode]);
 
-        PmFreq = add_knob(frame, "Freq",88,20,38,38);
-        PmFreq->scale.gravity = SOUTHWEST;
-        PmFreq->flags |= HAS_TOOLTIP;
-        add_tooltip(PmFreq, "Freq");
-        set_adjustment(PmFreq->adj, 0.01, 0.01, 0.01, 200.0, 0.01, CL_LOGARITHMIC);
-        set_widget_color(PmFreq, (Color_state)1, (Color_mod)2, 0.60, 0.80, 1.00, 1.0);
-        PmFreq->func.expose_callback = draw_knob;
-        PmFreq->func.value_changed_callback = pmfreq_callback;
-        commonWidgetSettings(PmFreq);
-
-        PmDepth = add_knob(frame, "Depth",128,20,38,38);
+        PmDepth = add_knob(frame, "Depth",88,20,38,38);
         PmDepth->scale.gravity = SOUTHWEST;
         PmDepth->flags |= HAS_TOOLTIP;
-        add_tooltip(PmDepth, "Depth");
+        add_tooltip(PmDepth, "PM Depth");
         set_adjustment(PmDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(PmDepth, (Color_state)1, (Color_mod)2, 0.55, 0.95, 0.80, 1.0);
         PmDepth->func.expose_callback = draw_knob;
         PmDepth->func.value_changed_callback = pmdepth_callback;
         commonWidgetSettings(PmDepth);
+
+        PmFreq = add_knob(frame, "Freq",128,20,38,38);
+        PmFreq->scale.gravity = SOUTHWEST;
+        PmFreq->flags |= HAS_TOOLTIP;
+        add_tooltip(PmFreq, "PM Freq");
+        set_adjustment(PmFreq->adj, 0.01, 0.01, 0.01, 200.0, 0.01, CL_LOGARITHMIC);
+        set_widget_color(PmFreq, (Color_state)1, (Color_mod)2, 0.60, 0.80, 1.00, 1.0);
+        PmFreq->func.expose_callback = draw_knob;
+        PmFreq->func.value_changed_callback = pmfreq_callback;
+        commonWidgetSettings(PmFreq);
 
         frame = add_frame(lw, "Vibrato", 187, 230, 105, 75);
         frame->scale.gravity = SOUTHWEST;
@@ -626,7 +626,7 @@ public:
         VibRate->scale.gravity = SOUTHWEST;
         VibRate->flags |= HAS_TOOLTIP;
         add_tooltip(VibRate, "Vibrato Rate");
-        set_adjustment(VibRate->adj, 5.0, 5.0, 0.0, 20.0, 0.1, CL_CONTINUOS);
+        set_adjustment(VibRate->adj, 5.0, 5.0, 0.1, 12.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(VibRate, (Color_state)1, (Color_mod)2, 0.00, 1.00, 0.78, 1.0);
         VibRate->func.expose_callback = draw_knob;
         VibRate->func.value_changed_callback = vibrate_callback;
@@ -651,7 +651,7 @@ public:
         TremRate->scale.gravity = SOUTHWEST;
         TremRate->flags |= HAS_TOOLTIP;
         add_tooltip(TremRate, "Tremolo Rate");
-        set_adjustment(TremRate->adj, 5.0, 5.0, 0.0, 20.0, 0.1, CL_CONTINUOS);
+        set_adjustment(TremRate->adj, 5.0, 5.0, 0.1, 15.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(TremRate, (Color_state)1, (Color_mod)2, 1.00, 0.78, 0.59, 1.0);
         TremRate->func.expose_callback = draw_knob;
         TremRate->func.value_changed_callback = tremrate_callback;
@@ -1779,7 +1779,7 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->tremrate = adj_get_value(w->adj);
         self->markDirty(18);
-        self->synth.setvibRate(self->tremrate);
+        self->synth.settremRate(self->tremrate);
     }
 
     // volume control

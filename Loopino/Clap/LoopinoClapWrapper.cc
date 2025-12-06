@@ -30,9 +30,9 @@
         param.registerParam("PmDepth",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&pmdepth,     false,  IS_FLOAT);
         param.registerParam("PmMode",    "Synth", 0, 3, 1, 1,             (void*)&pmmode,      true,   IS_INT);
         param.registerParam("VibDepth",  "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&vibdepth,    false,  IS_FLOAT);
-        param.registerParam("VibRate",   "Synth", 0.0, 20.0, 5.0, 0.01,   (void*)&vibrate,     false,  IS_FLOAT);
+        param.registerParam("VibRate",   "Synth", 0.1, 12.0, 5.0, 0.01,   (void*)&vibrate,     false,  IS_FLOAT);
         param.registerParam("TremDepth", "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&tremdepth,   false,  IS_FLOAT);
-        param.registerParam("TremRate",  "Synth", 0.0, 20.0, 5.0, 0.01,   (void*)&tremrate,    false,  IS_FLOAT);
+        param.registerParam("TremRate",  "Synth", 0.1, 15.0, 5.0, 0.01,   (void*)&tremrate,    false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
