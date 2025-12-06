@@ -18,7 +18,7 @@ typedef struct plugin_t plugin_t;
 #define RUN_AS_PLUGIN
 
 #define WINDOW_WIDTH  880
-#define WINDOW_HEIGHT 290
+#define WINDOW_HEIGHT 390
 
 #if defined(_WIN32)
 #define GUIAPI CLAP_WINDOW_API_WIN32

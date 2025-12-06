@@ -162,9 +162,11 @@ public:
     double pmPhase = 0.0;
     double pmFreq = 0.0;
     double pmDepthNorm = 0.0;
-    float pmDepthSamplesMax = 80.0f;
-    float pm_s1 = 0.0f;
-    float pm_s2 = 0.0f;
+    float vibRate = 5.0f;      // Hz
+    float vibDepth = 0.0f;     // 0..1 (depth)
+    float tremRate = 5.0f;     // Hz
+    float tremDepth = 0.0f;    // 0..1 (depth)
+
 
     SamplePlayer(double outputRate = 44100.0)
         :  sample(nullptr), srOut(outputRate), phase(0.0), phaseInc(0.0),
@@ -235,21 +237,32 @@ public:
         return tri;
     }
 
+    inline float fastNoise(uint32_t& state) {
+        state = state * 1664525u + 1013904223u;
+        return float(int32_t(state >> 9)) * (1.0f / 8388607.0f);
+    }
+
     inline float pmDrift(float p, float d) {
-        float noise = (float(rand()) / float(RAND_MAX)) * 2.0f - 1.0f;
+        float noise = fastNoise(noiseState);
         driftState = driftCoeff * driftState + (1.0f - driftCoeff) * noise;
         float phaseMod = sinf(p * 2.0f * M_PI);
         float mixed = driftState + phaseMod * (d * 0.25f);
         return mixed;
     }
 
-    inline float pmJuno(float pmPhase, float pmDepth) {
-        float noise = ((float(rand()) / float(RAND_MAX)) * 2.0f - 1.0f);
+    inline float pmJuno(float p, float d) {
+        float noise = fastNoise(noiseState);
         driftState = driftCoeff * driftState + (1.0f - driftCoeff) * noise;
-        float trend = sinf(pmPhase * 2.0f * M_PI) * pmDepth * 0.1f;
+        float trend = sinf(p * 2.0f * M_PI) * d * 0.1f;
         driftState += trend;
         driftState *= 0.9995f;
         return driftState;
+    }
+
+    inline float advancePhase(float ph, float rate, float sr) {
+        ph += rate / sr;
+        if (ph >= 1.0f) ph -= 1.0f;
+        return ph;
     }
 
     void reset() { phase = 0.0; }
@@ -264,9 +277,9 @@ public:
         if (size == 0) return 0.0f;
         float pm = 0.0f;
 
+        // Phase Modulators
         if (pmFreq > 0.01f && pmDepthNorm > 0.0f) {
-            pmPhase += pmFreq / srOut;
-            if (pmPhase >= 1.0f) pmPhase -= 1.0f;
+            pmPhase = advancePhase(pmPhase, pmFreq, srOut);
             float pmDepth = pmDepthNorm * pmDepthSamplesMax;
             float rawPM = 0.0f;
             switch(pmShape) {
@@ -287,6 +300,24 @@ public:
             pm = saturatePM(mod);
         }
         double readPos = phase + pm;
+        float phaseIncMod = phaseInc;
+        float gainMod = 1.0f;
+
+        // Vibrato (Pitch LFO)
+        if (vibDepth > 0.0001f && vibRate > 0.1f) {
+            vibPhase = advancePhase(vibPhase, vibRate, srOut);
+            float lfo = pmSoftSine(vibPhase);
+            float vib = lfo * vibDepth * 0.01f;
+            phaseIncMod *= (1.0f + vib);
+        }
+
+        // Tremolo (Amplitude LFO)
+        if (tremDepth > 0.0001f && tremRate > 0.1f) {
+            tremPhase = advancePhase(tremPhase, tremRate, srOut);
+            float lfo = pmSoftSine(tremPhase);
+            float lfoUni = 0.5f * (lfo + 1.0f);
+            gainMod = 1.0f - tremDepth * (1.0f - lfoUni);
+        }
 
         if (looping) {
             double loopLen = std::max(1.0, (double)(loopEnd - loopStart));
@@ -300,7 +331,7 @@ public:
         size_t i1 = std::min(i0 + 1, size - 1);
         float frac = readPos - (double)i0;
         float val = s[i0] + frac * (s[i1] - s[i0]);
-        phase += phaseInc;
+        phase += phaseIncMod;
 
         if (looping) {
             if (phase >= loopEnd)
@@ -310,7 +341,7 @@ public:
                 return 0.0f;
         }
 
-        return val;
+        return val * gainMod;
     }
 
     void processSave(int duration, std::vector<float>& abuf) {
@@ -363,7 +394,14 @@ private:
     double phase = 0.0;
     double phaseInc = 0.0;
     float driftState = 0.0f;
-    float driftCoeff = 0.995f;
+    float driftCoeff = 0.9995f;
+    float pmDepthSamplesMax = 80.0f;
+    float pm_s1 = 0.0f;
+    float pm_s2 = 0.0f;
+    float vibPhase = 0.0f;
+    float tremPhase = 0.0f;
+
+    uint32_t noiseState = 1;
     size_t loopStart;
     size_t loopEnd;
     bool looping;
@@ -431,18 +469,16 @@ public:
     }
 
     void setAttack(float a) {env.setAttack(a);}
-
     void setDecay(float d) {env.setDecay(d);}
-
     void setSustain(float s) {env.setSustain(s);}
-
     void setRelease(float r) {env.setRelease(r);}
-
     void setPmFreq(float f) {player.pmFreq = f;}
-
     void setPmDepth(float d) {player.pmDepthNorm = d;}
-
     void setPmMode(int m) {player.setPmMode(m);}
+    void setvibDepth(float v) {player.vibDepth = v;}
+    void setvibRate(float r) {player.vibRate = r;}
+    void settremDepth(float t) {player.tremDepth = t;}
+    void settremRate(float r) {player.tremRate = r;}
 
     void setRootFreq(float freq_) {freq = freq_;}
 
@@ -696,6 +732,30 @@ public:
     void setPmMode(int m) {
         for (auto& v : voices) {
             v->setPmMode(m);
+        }
+    }
+
+    void setvibDepth(float d) {
+        for (auto& v : voices) {
+            v->setvibDepth(d);
+        }
+    }
+
+    void setvibRate(float r) {
+        for (auto& v : voices) {
+            v->setvibRate(r);
+        }
+    }
+
+    void settremDepth(float t) {
+        for (auto& v : voices) {
+            v->settremDepth(t);
+        }
+    }
+
+    void settremRate(float r) {
+        for (auto& v : voices) {
+            v->settremRate(r);
         }
     }
 

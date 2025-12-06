@@ -29,6 +29,10 @@
         param.registerParam("PmFreq",    "Synth", 0.01, 200.0, 0.01, 0.01,(void*)&pmfreq,      false,  IS_FLOAT);
         param.registerParam("PmDepth",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&pmdepth,     false,  IS_FLOAT);
         param.registerParam("PmMode",    "Synth", 0, 3, 1, 1,             (void*)&pmmode,      true,   IS_INT);
+        param.registerParam("VibDepth",  "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&vibdepth,    false,  IS_FLOAT);
+        param.registerParam("VibRate",   "Synth", 0.0, 20.0, 5.0, 0.01,   (void*)&vibrate,     false,  IS_FLOAT);
+        param.registerParam("TremDepth", "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&tremdepth,   false,  IS_FLOAT);
+        param.registerParam("TremRate",  "Synth", 0.0, 20.0, 5.0, 0.01,   (void*)&tremrate,    false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -49,6 +53,10 @@
             adj_set_value(PmFreq->adj, pmfreq);
             adj_set_value(PmDepth->adj, pmdepth);
             radio_box_set_active(PmMode[pmmode]);
+            adj_set_value(VibDepth->adj, vibdepth);
+            adj_set_value(VibRate->adj, vibrate);
+            adj_set_value(TremDepth->adj, tremdepth);
+            adj_set_value(TremRate->adj, tremrate);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -62,6 +70,10 @@
             synth.setPmFreq(pmfreq);
             synth.setPmDepth(pmdepth);
             synth.setPmMode(pmmode);
+            synth.setvibDepth(vibdepth);
+            synth.setvibRate(vibrate);
+            synth.settremDepth(tremdepth);
+            synth.settremRate(tremrate);
         }
     }
 
@@ -69,7 +81,7 @@
         main_init(&app);
         set_custom_theme(&app);
         int w = 880;
-        int h = 290;
+        int h = 390;
         #if defined(_WIN32)
         w_top  = create_window(&app, (HWND) window, 0, 0, w, h);
         #else
@@ -85,7 +97,7 @@
         main_init(&app);
         set_custom_theme(&app);
         int w = 880;
-        int h = 290;
+        int h = 390;
         w_top  = create_window(&app, os_get_root_window(&app, IS_WINDOW), 0, 0, w, h);
         w_top->flags |= HIDE_ON_DELETE;
         createGUI(&app);

@@ -158,6 +158,10 @@ public:
         fadeout = 0.0f;
         pmfreq = 0.1f;
         pmdepth = 0.0f;
+        vibdepth = 0.0f;
+        vibrate = 5.0f;
+        tremdepth = 0.0f;
+        tremrate = 5.0f;
         pmmode = 0;
         useLoop = 0;
         timer = 30;
@@ -378,12 +382,12 @@ public:
         commonWidgetSettings(Record);
         #endif
 
-        frame = add_frame(lw, "Loop Buffer", 2, 145, 428, 75);
+        frame = add_frame(lw, "Loop Buffer", 2, 145, 180, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        setLoop = add_image_toggle_button(frame, "", 20, 20, 35, 35);
+        setLoop = add_image_toggle_button(frame, "", 15, 20, 35, 35);
         setLoop->scale.gravity = SOUTHWEST;
         widget_get_png(setLoop, LDVAR(loop_png));
         setLoop->flags |= HAS_TOOLTIP;
@@ -391,7 +395,7 @@ public:
         setLoop->func.value_changed_callback = button_set_callback;
         commonWidgetSettings(setLoop);
 
-        setLoopSize = add_knob(frame, "S",275,18,38,38);
+        setLoopSize = add_knob(frame, "S",53,18,38,38);
         setLoopSize->scale.gravity = SOUTHWEST;
         setLoopSize->flags |= HAS_TOOLTIP;
         add_tooltip(setLoopSize, "Loop Periods");
@@ -400,19 +404,74 @@ public:
         setLoopSize->func.value_changed_callback = setLoopSize_callback;
         commonWidgetSettings(setLoopSize);
 
-        setPrevLoop = add_button(frame, "<", 325, 20, 35, 35);
+        setPrevLoop = add_button(frame, "<", 95, 20, 35, 35);
         setPrevLoop->scale.gravity = SOUTHWEST;
         setPrevLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setPrevLoop, "Load previous loop");
         setPrevLoop->func.value_changed_callback = setPrevLoop_callback;
         commonWidgetSettings(setPrevLoop);
 
-        setNextLoop = add_button(frame, ">", 365, 20, 35, 35);
+        setNextLoop = add_button(frame, ">", 130, 20, 35, 35);
         setNextLoop->scale.gravity = SOUTHWEST;
         setNextLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
         commonWidgetSettings(setNextLoop);
+
+        frame = add_frame(lw, "Sharp", 187, 145, 105, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Sharp = add_knob(frame, "Square",15,20,38,38);
+        Sharp->scale.gravity = SOUTHWEST;
+        Sharp->flags |= HAS_TOOLTIP;
+        add_tooltip(Sharp, "Square");
+        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
+        Sharp->func.expose_callback = draw_knob;
+        Sharp->func.value_changed_callback = sharp_callback;
+        commonWidgetSettings(Sharp);
+
+        Saw = add_knob(frame, "Saw",55,20,38,38);
+        Saw->scale.gravity = SOUTHWEST;
+        Saw->flags |= HAS_TOOLTIP;
+        add_tooltip(Saw, "Saw Tooth");
+        set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
+        Saw->func.expose_callback = draw_knob;
+        Saw->func.value_changed_callback = saw_callback;
+        commonWidgetSettings(Saw);
+
+        frame = add_frame(lw, "Gain", 297, 145, 65, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Volume = add_knob(frame, "dB",14,20,38,38);
+        Volume->scale.gravity = SOUTHWEST;
+        Volume->flags |= HAS_TOOLTIP;
+        add_tooltip(Volume, "Volume (dB)");
+        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 12.0, 0.1, CL_CONTINUOS);
+        set_widget_color(Volume, (Color_state)1, (Color_mod)2, 0.38, 0.62, 0.94, 1.0);
+        Volume->func.expose_callback = draw_knob;
+        Volume->func.value_changed_callback = volume_callback;
+        commonWidgetSettings(Volume);
+
+        #ifndef RUN_AS_PLUGIN
+        frame = add_frame(lw, "Exit", 367, 145, 62, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        w_quit = add_button(frame, "", 15, 20, 35, 35);
+        widget_get_png(w_quit, LDVAR(exit__png));
+        w_quit->scale.gravity = SOUTHWEST;
+        w_quit->flags |= HAS_TOOLTIP;
+        add_tooltip(w_quit, "Exit");
+        w_quit->func.value_changed_callback = button_quit_callback;
+        commonWidgetSettings(w_quit);
+        #endif
 
         frame = add_frame(w, "ADSR", 10, 230, 190, 75);
         frame->scale.gravity = SOUTHWEST;
@@ -497,38 +556,38 @@ public:
         Frequency->func.value_changed_callback = frequency_callback;
         commonWidgetSettings(Frequency);
 
-        frame = add_frame(lw, "Phase Modulator", 2, 230, 163, 75);
+        frame = add_frame(lw, "Phase Modulator", 2, 230, 180, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        PmMode[0] = add_check_box(frame,"Sine" , 8, 12, 15, 15);
+        PmMode[0] = add_check_box(frame,"Sine" , 12, 12, 15, 15);
         PmMode[0]->flags |= IS_RADIO;
         set_widget_color(PmMode[0], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
         commonWidgetSettings(PmMode[0]);
         PmMode[0]->func.value_changed_callback = radio_box_button_pressed;
 
-        PmMode[1] = add_check_box(frame,"Triangle" , 8, 27, 15, 15);
+        PmMode[1] = add_check_box(frame,"Triangle" , 12, 27, 15, 15);
         PmMode[1]->flags |= IS_RADIO;
         set_widget_color(PmMode[1], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
         commonWidgetSettings(PmMode[1]);
         PmMode[1]->func.value_changed_callback = radio_box_button_pressed;
 
-        PmMode[2] = add_check_box(frame,"Noise" , 8, 42, 15, 15);
+        PmMode[2] = add_check_box(frame,"Noise" , 12, 42, 15, 15);
         PmMode[2]->flags |= IS_RADIO;
         commonWidgetSettings(PmMode[2]);
         set_widget_color(PmMode[2], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
         PmMode[2]->func.value_changed_callback = radio_box_button_pressed;
         radio_box_set_active(PmMode[pmmode]);
 
-        PmMode[3] = add_check_box(frame,"Juno" , 8, 57, 15, 15);
+        PmMode[3] = add_check_box(frame,"Juno" , 12, 57, 15, 15);
         PmMode[3]->flags |= IS_RADIO;
         commonWidgetSettings(PmMode[3]);
         set_widget_color(PmMode[3], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
         PmMode[3]->func.value_changed_callback = radio_box_button_pressed;
         radio_box_set_active(PmMode[pmmode]);
 
-        PmFreq = add_knob(frame, "Freq",73,20,38,38);
+        PmFreq = add_knob(frame, "Freq",88,20,38,38);
         PmFreq->scale.gravity = SOUTHWEST;
         PmFreq->flags |= HAS_TOOLTIP;
         add_tooltip(PmFreq, "Freq");
@@ -538,7 +597,7 @@ public:
         PmFreq->func.value_changed_callback = pmfreq_callback;
         commonWidgetSettings(PmFreq);
 
-        PmDepth = add_knob(frame, "Depth",113,20,38,38);
+        PmDepth = add_knob(frame, "Depth",128,20,38,38);
         PmDepth->scale.gravity = SOUTHWEST;
         PmDepth->flags |= HAS_TOOLTIP;
         add_tooltip(PmDepth, "Depth");
@@ -548,60 +607,55 @@ public:
         PmDepth->func.value_changed_callback = pmdepth_callback;
         commonWidgetSettings(PmDepth);
 
-        frame = add_frame(lw, "Sharp", 170, 230, 110, 75);
+        frame = add_frame(lw, "Vibrato", 187, 230, 105, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        Sharp = add_knob(frame, "Square",15,20,38,38);
-        Sharp->scale.gravity = SOUTHWEST;
-        Sharp->flags |= HAS_TOOLTIP;
-        add_tooltip(Sharp, "Square");
-        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
-        set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
-        Sharp->func.expose_callback = draw_knob;
-        Sharp->func.value_changed_callback = sharp_callback;
-        commonWidgetSettings(Sharp);
+        VibDepth = add_knob(frame, "VibDepth",15,20,38,38);
+        VibDepth->scale.gravity = SOUTHWEST;
+        VibDepth->flags |= HAS_TOOLTIP;
+        add_tooltip(VibDepth, "Vibrato Depth");
+        set_adjustment(VibDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(VibDepth, (Color_state)1, (Color_mod)2, 0.00, 0.78, 1.00, 1.0);
+        VibDepth->func.expose_callback = draw_knob;
+        VibDepth->func.value_changed_callback = vibdepth_callback;
+        commonWidgetSettings(VibDepth);
 
-        Saw = add_knob(frame, "Saw",55,20,38,38);
-        Saw->scale.gravity = SOUTHWEST;
-        Saw->flags |= HAS_TOOLTIP;
-        add_tooltip(Saw, "Saw Tooth");
-        set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
-        set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
-        Saw->func.expose_callback = draw_knob;
-        Saw->func.value_changed_callback = saw_callback;
-        commonWidgetSettings(Saw);
+        VibRate = add_knob(frame, "VibRate",55,20,38,38);
+        VibRate->scale.gravity = SOUTHWEST;
+        VibRate->flags |= HAS_TOOLTIP;
+        add_tooltip(VibRate, "Vibrato Rate");
+        set_adjustment(VibRate->adj, 5.0, 5.0, 0.0, 20.0, 0.1, CL_CONTINUOS);
+        set_widget_color(VibRate, (Color_state)1, (Color_mod)2, 0.00, 1.00, 0.78, 1.0);
+        VibRate->func.expose_callback = draw_knob;
+        VibRate->func.value_changed_callback = vibrate_callback;
+        commonWidgetSettings(VibRate);
 
-        frame = add_frame(lw, "Gain", 285, 230, 70, 75);
+        frame = add_frame(lw, "Tremolo", 297, 230, 105, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        Volume = add_knob(frame, "dB",16,20,38,38);
-        Volume->scale.gravity = SOUTHWEST;
-        Volume->flags |= HAS_TOOLTIP;
-        add_tooltip(Volume, "Volume (dB)");
-        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 12.0, 0.1, CL_CONTINUOS);
-        set_widget_color(Volume, (Color_state)1, (Color_mod)2, 0.38, 0.62, 0.94, 1.0);
-        Volume->func.expose_callback = draw_knob;
-        Volume->func.value_changed_callback = volume_callback;
-        commonWidgetSettings(Volume);
+        TremDepth = add_knob(frame, "TremDepth",15,20,38,38);
+        TremDepth->scale.gravity = SOUTHWEST;
+        TremDepth->flags |= HAS_TOOLTIP;
+        add_tooltip(TremDepth, "Tremolo Depth");
+        set_adjustment(TremDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(TremDepth, (Color_state)1, (Color_mod)2, 1.00, 0.67, 0.47, 1.0);
+        TremDepth->func.expose_callback = draw_knob;
+        TremDepth->func.value_changed_callback = tremdepth_callback;
+        commonWidgetSettings(TremDepth);
 
-        #ifndef RUN_AS_PLUGIN
-        frame = add_frame(lw, "Exit", 360, 230, 70, 75);
-        frame->scale.gravity = SOUTHWEST;
-        frame->func.expose_callback = draw_frame;
-        commonWidgetSettings(frame);
-
-        w_quit = add_button(frame, "", 18, 20, 35, 35);
-        widget_get_png(w_quit, LDVAR(exit__png));
-        w_quit->scale.gravity = SOUTHWEST;
-        w_quit->flags |= HAS_TOOLTIP;
-        add_tooltip(w_quit, "Exit");
-        w_quit->func.value_changed_callback = button_quit_callback;
-        commonWidgetSettings(w_quit);
-        #endif
+        TremRate = add_knob(frame, "TremRate",55,20,38,38);
+        TremRate->scale.gravity = SOUTHWEST;
+        TremRate->flags |= HAS_TOOLTIP;
+        add_tooltip(TremRate, "Tremolo Rate");
+        set_adjustment(TremRate->adj, 5.0, 5.0, 0.0, 20.0, 0.1, CL_CONTINUOS);
+        set_widget_color(TremRate, (Color_state)1, (Color_mod)2, 1.00, 0.78, 0.59, 1.0);
+        TremRate->func.expose_callback = draw_knob;
+        TremRate->func.value_changed_callback = tremrate_callback;
+        commonWidgetSettings(TremRate);
 
         keyboard = add_midi_keyboard(w_top, "Organ", 0, 310, 880, 80);
         keyboard->flags |= HIDE_ON_DELETE;
@@ -658,6 +712,10 @@ private:
     Widget_t *PmFreq;
     Widget_t *PmDepth;
     Widget_t *PmMode[4];
+    Widget_t *VibDepth;
+    Widget_t *VibRate;
+    Widget_t *TremDepth;
+    Widget_t *TremRate;
 
     Window    p;
 
@@ -689,6 +747,10 @@ private:
     float fadeout;
     float pmfreq;
     float pmdepth;
+    float vibdepth;
+    float vibrate;
+    float tremdepth;
+    float tremrate;
     int pmmode;
     int useLoop;
     
@@ -976,7 +1038,9 @@ private:
         loopData->data = loopBuffer;
         loopData->sourceRate = (double)jack_sr;
         loopData->rootFreq = (double)(freq * cor);
-        lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
+        int set = max(1,jack_sr/loopBuffer.size());
+        for (int i =0; i<set;i++)
+            lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
         synth.setLoopBank(&lbank);
         if (guiIsCreated) {
             uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
@@ -1682,6 +1746,42 @@ private:
         }
     }
 
+    // VibDepth control
+    static void vibdepth_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->vibdepth = adj_get_value(w->adj);
+        self->markDirty(15);
+        self->synth.setvibDepth(self->vibdepth);
+    }
+
+    // VibRate control
+    static void vibrate_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->vibrate = adj_get_value(w->adj);
+        self->markDirty(16);
+        self->synth.setvibRate(self->vibrate);
+    }
+
+    // Tremolo Depth control
+    static void tremdepth_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->tremdepth = adj_get_value(w->adj);
+        self->markDirty(17);
+        self->synth.settremDepth(self->tremdepth);
+    }
+
+    // VibRate control
+    static void tremrate_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->tremrate = adj_get_value(w->adj);
+        self->markDirty(18);
+        self->synth.setvibRate(self->tremrate);
+    }
+
     // volume control
     static void volume_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
@@ -1790,9 +1890,9 @@ private:
         Colors *c = get_color_scheme(w, NORMAL_);
         cairo_pattern_t *pat = cairo_pattern_create_linear (x, y, x, y + h);
         cairo_pattern_add_color_stop_rgba
-            (pat, 0, c->bg[0]*1.5, c->bg[1]*1.5, c->bg[2]*1.5,1.0);
+            (pat, 0, c->bg[0]*1.9, c->bg[1]*1.9, c->bg[2]*1.9,1.0);
         cairo_pattern_add_color_stop_rgba 
-            (pat, 1, c->bg[0]*0.2, c->bg[1]*0.2, c->bg[2]*0.2,1.0);
+            (pat, 1, c->bg[0]*0.1, c->bg[1]*0.1, c->bg[2]*0.1,1.0);
         cairo_set_source(w->crb, pat);
         cairo_pattern_destroy (pat);
     }
@@ -1823,14 +1923,14 @@ private:
         cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
         cairo_set_font_size (w->crb, w->app->normal_font/w->scale.ascale);
         cairo_text_extents(w->crb,"Abc" , &extents);
-        cairo_move_to (w->crb, 22, extents.height);
+        cairo_move_to (w->crb, 20, extents.height);
         cairo_show_text(w->crb, w->label);
         cairo_new_path (w->crb);
 
         cairo_text_extents(w->crb,w->label , &extents);
-        cairo_set_line_width(w->crb,1);
-       // setFrameColour(w, 5, 5, width_t-10, height_t-10);
-        cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
+        cairo_set_line_width(w->crb,2);
+        setFrameColour(w, 5, 5, width_t-10, height_t-10);
+        //cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
         rounded_frame(w->crb, 5, 5, width_t-10, height_t-8, extents.width+10);
         cairo_stroke(w->crb);
     }
@@ -1890,6 +1990,12 @@ private:
         const double radius = min(knob_x-pointer_off, knob_y-pointer_off) / 2;
 
         const double add_angle = 90 * (M_PI / 180.);
+        // base frame
+        setFrameColour(w, 0, 0, width, height);
+        cairo_set_line_width(w->crb,  2.0/w->scale.ascale);
+        cairo_arc (w->crb, knobx1+arc_offset, knoby1+arc_offset, radius+3,
+              add_angle, add_angle + 360 * (M_PI/180));
+        cairo_stroke(w->crb);
         // base
         use_base_color_scheme(w, INSENSITIVE_);
         cairo_set_line_width(w->crb,  5.0/w->scale.ascale);
@@ -2383,7 +2489,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 6; // guard for future proof
+        header.version = 8; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -2399,11 +2505,20 @@ private:
         writeControllerValue(out, Resonance);
         writeControllerValue(out, CutOff);
         // since version 4
-         writeControllerValue(out, Sharp);
+        writeControllerValue(out, Sharp);
         // since version 5
-         writeControllerValue(out, Saw);
+        writeControllerValue(out, Saw);
         // since version 6
-         writeControllerValue(out, FadeOut);
+        writeControllerValue(out, FadeOut);
+        // since version 7
+        writeControllerValue(out, PmFreq);
+        writeControllerValue(out, PmDepth);
+        writeValue(out, pmmode);
+        // since version 8
+        writeControllerValue(out, VibDepth);
+        writeControllerValue(out, VibRate);
+        writeControllerValue(out, TremDepth);
+        writeControllerValue(out, TremRate);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -2425,7 +2540,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 6) {
+        if (header.version > 8) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
         }
 
@@ -2449,6 +2564,18 @@ private:
         }
         if (header.version > 5) {
             readControllerValue(in, FadeOut);
+        }
+        if (header.version > 6) {
+            readControllerValue(in, PmFreq);
+            readControllerValue(in, PmDepth);
+            readValue(in, pmmode);
+            radio_box_set_active(PmMode[pmmode]);
+        }
+        if (header.version > 7) {
+            readControllerValue(in, VibDepth);
+            readControllerValue(in, VibRate);
+            readControllerValue(in, TremDepth);
+            readControllerValue(in, TremRate);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);
