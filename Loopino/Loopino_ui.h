@@ -1773,7 +1773,7 @@ private:
         self->synth.settremDepth(self->tremdepth);
     }
 
-    // VibRate control
+    // Tremolo Rate control
     static void tremrate_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);

@@ -267,6 +267,20 @@ public:
 
     void reset() { phase = 0.0; }
 
+    inline float hermite_interpolation(const float* s, float t) {
+        const float xm1 = s[-1];
+        const float x0  = s[0];
+        const float x1  = s[1];
+        const float x2  = s[2];
+
+        float c0 = x0;
+        float c1 = 0.5f * (x1 - xm1);
+        float c2 = xm1 - 2.5f*x0 + 2.0f*x1 - 0.5f*x2;
+        float c3 = 0.5f * (x2 - xm1) + 1.5f*(x0 - x1);
+
+        return ((c3 * t + c2) * t + c1) * t + c0;
+    }
+
     float process() {
         const SampleInfo* p = sample.load(std::memory_order_acquire);
         if (!p || p->data.empty())
@@ -327,10 +341,13 @@ public:
             readPos = std::clamp(readPos, 0.0, (double)size - 1.0);
         }
 
-        size_t i0 = (size_t)readPos;
-        size_t i1 = std::min(i0 + 1, size - 1);
-        float frac = readPos - (double)i0;
-        float val = s[i0] + frac * (s[i1] - s[i0]);
+        size_t i = (size_t)readPos;
+        float frac = readPos - (double)i;
+        size_t i_m1 = (i == 0 ? 0 : i - 1);
+        size_t i_p1 = (i + 1 < size ? i + 1 : size - 1);
+        size_t i_p2 = (i + 2 < size ? i + 2 : size - 1);
+        float tmp[4] = {s[i_m1], s[i], s[i_p1], s[i_p2]};
+        float val = hermite_interpolation(&tmp[1], frac);
         phase += phaseIncMod;
 
         if (looping) {
