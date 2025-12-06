@@ -89,6 +89,7 @@ public:
 
     uint8_t rootkey;
     uint8_t loopRootkey;
+    uint8_t saveRootkey;
 
     int16_t pitchCorrection;
     int16_t loopPitchCorrection;
@@ -139,6 +140,7 @@ public:
         freq = 0.0;
         pitchCorrection = 0;
         rootkey = 60;
+        saveRootkey = 69;
         loopFreq = 0.0;
         loopPitchCorrection = 0;
         loopRootkey = 69;
@@ -601,7 +603,7 @@ public:
         PmFreq->scale.gravity = SOUTHWEST;
         PmFreq->flags |= HAS_TOOLTIP;
         add_tooltip(PmFreq, "PM Freq");
-        set_adjustment(PmFreq->adj, 0.01, 0.01, 0.01, 200.0, 0.01, CL_LOGARITHMIC);
+        set_adjustment(PmFreq->adj, 0.01, 0.01, 0.01, 30.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(PmFreq, (Color_state)1, (Color_mod)2, 0.60, 0.80, 1.00, 1.0);
         PmFreq->func.expose_callback = draw_knob;
         PmFreq->func.value_changed_callback = pmfreq_callback;
@@ -1038,9 +1040,9 @@ private:
         loopData->data = loopBuffer;
         loopData->sourceRate = (double)jack_sr;
         loopData->rootFreq = (double)(freq * cor);
-        int set = max(1,jack_sr/loopBuffer.size());
-        for (int i =0; i<set;i++)
-            lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
+       // int set = max(1,jack_sr/loopBuffer.size());
+       // for (int i =0; i<set;i++)
+        lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
         synth.setLoopBank(&lbank);
         if (guiIsCreated) {
             uint32_t length = loopPoint_r_auto - loopPoint_l_auto;
@@ -1460,6 +1462,14 @@ private:
             } 
             self->setLoopToBank();
     }
+
+    // Root Key
+    static void set_root_key(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->saveRootkey = static_cast<uint8_t>(adj_get_value(w->adj));
+    }
+
 
     // quit
     static void button_quit_callback(void *w_, void* user_data) {
@@ -2259,6 +2269,15 @@ private:
             defined(__NetBSD__) || defined(__OpenBSD__)
         XSetTransientForHint(w_top->app->dpy, dia->widget, w_top->widget);
         #endif
+        Widget_t *rootKey = add_combobox(dia, "", 260, 355, 70, 30);
+        rootKey->parent_struct = (void*)this;
+        for (auto & element : keys) {
+            combobox_add_entry(rootKey, element.c_str());
+        }
+        combobox_set_menu_size(rootKey, 12);
+        combobox_set_active_entry(rootKey, saveRootkey);
+        rootKey->func.value_changed_callback = set_root_key;
+        widget_show_all(dia);
         w_top->func.dialog_callback = [] (void *w_, void* user_data) {
             Widget_t *w = (Widget_t*)w_;
             if(user_data !=NULL && strlen(*(const char**)user_data)) {
@@ -2270,12 +2289,12 @@ private:
                     std::string extension = filename.substr(0, idx-1);
                     filename = extension;
                 }
-                std::string sampleFileName = filename + self->keys[69] + ".wav";
-                std::string loopFileName = filename + self->keys[69] + "_loop" + ".wav";
+                std::string sampleFileName = filename + self->keys[self->saveRootkey] + ".wav";
+                std::string loopFileName = filename + self->keys[self->saveRootkey] + "_loop" + ".wav";
                 std::vector<float> s;
                 std::vector<float> l;
-                self->synth.getSaveBuffer(false, s, 69, 1);
-                self->synth.getSaveBuffer(true, l, 69, 48);
+                self->synth.getSaveBuffer(false, s, self->saveRootkey, 1);
+                self->synth.getSaveBuffer(true, l, self->saveRootkey, 48);
                 self->af.saveAudioFile(sampleFileName, s.data(), s.size(), self->jack_sr);
                 self->af.saveAudioFile(loopFileName, l.data(), l.size(), self->jack_sr);
             }

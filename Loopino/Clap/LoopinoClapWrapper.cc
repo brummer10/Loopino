@@ -26,7 +26,7 @@
         param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       false,  IS_FLOAT);
         param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         false,  IS_FLOAT);
         param.registerParam("FadeOut",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&fadeout,     false,  IS_FLOAT);
-        param.registerParam("PmFreq",    "Synth", 0.01, 200.0, 0.01, 0.01,(void*)&pmfreq,      false,  IS_FLOAT);
+        param.registerParam("PmFreq",    "Synth", 0.01, 30.0, 0.01, 0.01,(void*)&pmfreq,      false,  IS_FLOAT);
         param.registerParam("PmDepth",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&pmdepth,     false,  IS_FLOAT);
         param.registerParam("PmMode",    "Synth", 0, 3, 1, 1,             (void*)&pmmode,      true,   IS_INT);
         param.registerParam("VibDepth",  "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&vibdepth,    false,  IS_FLOAT);

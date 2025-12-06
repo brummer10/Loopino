@@ -1,9 +1,30 @@
-# Loopino — A Minimalist Sampler for Linux
+# Loopino — A creative Sampler
 
-Loopino is a lightweight audio sampler designed for Linux systems, built around the JACK Audio Connection Kit. It allows you to load, trim, and loop audio files with precision, making it ideal for crafting seamless sample loops.
-With a clean, minimal interface and smooth JACK integration, Loopino fits perfectly into any Linux-based audio workflow — whether for sound design, live performance, or creative sampling experiments.
+Loopino is a lightweight audio sampler. It allows you to load, trim, and loop audio files with precision, making it ideal for crafting seamless sample loops.
+With a clean, minimal interface, Loopino fits perfectly into any audio workflow — whether for sound design, live performance, or creative sampling experiments.
+Loopino is available as standalone application, as Clap plugin and as vst2 plugin.
 
 ## Features
+
+- ADSR
+- load Samples by drag and drop
+- integrated file browser
+- record and use Samples on the fly
+- trim Samples to clip marks
+- integrated non destructive fade out option
+- integrated Pitch tracker 
+- integrated Micro Loop Generator
+- option to select Loop duration
+- integrated non destructive wave sharpers ( square - saw tooth )
+- Preset handling 
+- export wav files from the Samples/Loops processed with the selected Key Note
+- Ladder filter (resonance, cutoff)
+- Phase Modulators (sine, triangle, noise, juno)
+- vibrato
+- tremolo
+- synth root frequency control
+- up to 48 voices
+
 
 Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun.
 
