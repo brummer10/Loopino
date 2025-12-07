@@ -154,6 +154,8 @@ public:
         frequency = 440.0f;
         resonance = 0.0;
         cutoff = 127.0;
+        hpresonance = 0.0;
+        hpcutoff = 127.0;
         volume = 0.0f;
         sharp = 0.0f;
         saw = 0.0f;
@@ -327,7 +329,7 @@ public:
         loopview->func.button_release_callback = set_playhead;
         commonWidgetSettings(loopview);
 
-        Widget_t* frame = add_frame(w, "Sample Buffer", 10, 145, 425, 75);
+        Widget_t* frame = add_frame(w, "Sample Buffer", 10, 145, 305, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -348,7 +350,7 @@ public:
         Presets->func.value_changed_callback = presets_callback;
         commonWidgetSettings(Presets);
 
-        FadeOut = add_knob(frame, "FadeOut",230,18,38,38);
+        FadeOut = add_knob(frame, "FadeOut",135,18,38,38);
         FadeOut->scale.gravity = SOUTHWEST;
         FadeOut->flags |= HAS_TOOLTIP;
         add_tooltip(FadeOut, "Fade Out Samplebuffer");
@@ -358,7 +360,7 @@ public:
         FadeOut->func.value_changed_callback = fade_callback;
         commonWidgetSettings(FadeOut);
 
-        clip = add_button(frame, "", 290, 20, 35, 35);
+        clip = add_button(frame, "", 175, 20, 35, 35);
         clip->scale.gravity = SOUTHWEST;
         widget_get_png(clip, LDVAR(clip__png));
         clip->flags |= HAS_TOOLTIP;
@@ -366,7 +368,7 @@ public:
         clip->func.value_changed_callback = button_clip_callback;
         commonWidgetSettings(clip);
 
-        playbutton = add_image_toggle_button(frame, "", 330, 20, 35, 35);
+        playbutton = add_image_toggle_button(frame, "", 215, 20, 35, 35);
         playbutton->scale.gravity = SOUTHWEST;
         widget_get_png(playbutton, LDVAR(play_png));
         playbutton->flags |= HAS_TOOLTIP;
@@ -375,7 +377,7 @@ public:
         commonWidgetSettings(playbutton);
 
         #ifndef RUN_AS_PLUGIN
-        Record = add_image_toggle_button(frame, "", 370, 20, 35, 35);
+        Record = add_image_toggle_button(frame, "", 255, 20, 35, 35);
         Record->scale.gravity = SOUTHWEST;
         widget_get_png(Record, LDVAR(record_png));
         Record->flags |= HAS_TOOLTIP;
@@ -520,7 +522,7 @@ public:
         Release->func.value_changed_callback = release_callback;
         commonWidgetSettings(Release);
 
-        frame = add_frame(w, "Filter", 205, 230, 110, 75);
+        frame = add_frame(w, "LP Filter", 205, 230, 110, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -545,7 +547,32 @@ public:
         CutOff->func.value_changed_callback = cutoff_callback;
         commonWidgetSettings(CutOff);
 
-        frame = add_frame(w, "Synth Freq", 320, 230, 115, 75);
+        frame = add_frame(w, "HP Filter", 320, 230, 110, 75);
+        frame->scale.gravity = SOUTHWEST;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        HpResonance = add_knob(frame, "HpResonance",15,20,38,38);
+        HpResonance->scale.gravity = SOUTHWEST;
+        HpResonance->flags |= HAS_TOOLTIP;
+        add_tooltip(HpResonance, "Resonance");
+        set_adjustment(HpResonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(HpResonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
+        HpResonance->func.expose_callback = draw_knob;
+        HpResonance->func.value_changed_callback = hpresonance_callback;
+        commonWidgetSettings(HpResonance);
+
+        HpCutOff = add_knob(frame, "HpCutOff",55,20,38,38);
+        HpCutOff->scale.gravity = SOUTHWEST;
+        HpCutOff->flags |= HAS_TOOLTIP;
+        add_tooltip(HpCutOff, "CutOff");
+        set_adjustment(HpCutOff->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(HpCutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
+        HpCutOff->func.expose_callback = draw_knob;
+        HpCutOff->func.value_changed_callback = hpcutoff_callback;
+        commonWidgetSettings(HpCutOff);
+
+        frame = add_frame(w, "Synth Freq", 320, 145, 115, 75);
         frame->scale.gravity = SOUTHWEST;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -708,6 +735,8 @@ private:
     Widget_t *Frequency;
     Widget_t *Resonance;
     Widget_t *CutOff;
+    Widget_t *HpResonance;
+    Widget_t *HpCutOff;
     Widget_t *Sharp;
     Widget_t *Saw;
     Widget_t *FadeOut;
@@ -743,6 +772,8 @@ private:
     float frequency;
     float resonance;
     float cutoff;
+    float hpresonance;
+    float hpcutoff;
     float volume;
     float sharp;
     float saw;
@@ -1470,7 +1501,6 @@ private:
         self->saveRootkey = static_cast<uint8_t>(adj_get_value(w->adj));
     }
 
-
     // quit
     static void button_quit_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
@@ -1696,7 +1726,7 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->resonance = adj_get_value(w->adj);
         self->markDirty(8);
-        self->synth.setReso((int)self->resonance);
+        self->synth.setResoLP((int)self->resonance);
     }
 
     // Cutoff control
@@ -1705,7 +1735,25 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->cutoff = adj_get_value(w->adj);
         self->markDirty(9);
-        self->synth.setCutoff((int)self->cutoff);
+        self->synth.setCutoffLP((int)self->cutoff);
+    }
+
+    // Resonance control
+    static void hpresonance_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->hpresonance = adj_get_value(w->adj);
+        self->markDirty(15);
+        self->synth.setResoHP((int)self->hpresonance);
+    }
+
+    // Cutoff control
+    static void hpcutoff_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->hpcutoff = adj_get_value(w->adj);
+        self->markDirty(16);
+        self->synth.setCutoffHP((int)self->hpcutoff);
     }
 
     // pmfreq control
@@ -2508,7 +2556,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 8; // guard for future proof
+        header.version = 9; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -2538,6 +2586,9 @@ private:
         writeControllerValue(out, VibRate);
         writeControllerValue(out, TremDepth);
         writeControllerValue(out, TremRate);
+        // since version 9
+        writeControllerValue(out, HpResonance);
+        writeControllerValue(out, HpCutOff);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -2559,8 +2610,9 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 8) {
+        if (header.version > 9) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
+            return false;
         }
 
         readValue(in, currentLoop);
@@ -2595,6 +2647,10 @@ private:
             readControllerValue(in, VibRate);
             readControllerValue(in, TremDepth);
             readControllerValue(in, TremRate);
+        }
+        if (header.version > 8) {
+            readControllerValue(in, HpResonance);
+            readControllerValue(in, HpCutOff);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);

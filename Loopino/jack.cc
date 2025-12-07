@@ -66,9 +66,9 @@ void process_midi(void* midi_input_port_buf) {
                         in_event.buffer[1]== 0)) { // bank change (LSB/MSB) on any midi channel
                 //fprintf(stderr,"bank changed %i", (int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 71) {
-                ui.synth.setReso((int)in_event.buffer[2]);
+                ui.synth.setResoLP((int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 74) {
-                ui.synth.setCutoff((int)in_event.buffer[2]);
+                ui.synth.setCutoffLP((int)in_event.buffer[2]);
             } else {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }

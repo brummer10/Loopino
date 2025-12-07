@@ -26,13 +26,15 @@
         param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       false,  IS_FLOAT);
         param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         false,  IS_FLOAT);
         param.registerParam("FadeOut",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&fadeout,     false,  IS_FLOAT);
-        param.registerParam("PmFreq",    "Synth", 0.01, 30.0, 0.01, 0.01,(void*)&pmfreq,      false,  IS_FLOAT);
+        param.registerParam("PmFreq",    "Synth", 0.01, 30.0, 0.01, 0.01, (void*)&pmfreq,      false,  IS_FLOAT);
         param.registerParam("PmDepth",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&pmdepth,     false,  IS_FLOAT);
         param.registerParam("PmMode",    "Synth", 0, 3, 1, 1,             (void*)&pmmode,      true,   IS_INT);
         param.registerParam("VibDepth",  "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&vibdepth,    false,  IS_FLOAT);
         param.registerParam("VibRate",   "Synth", 0.1, 12.0, 5.0, 0.01,   (void*)&vibrate,     false,  IS_FLOAT);
         param.registerParam("TremDepth", "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&tremdepth,   false,  IS_FLOAT);
         param.registerParam("TremRate",  "Synth", 0.1, 15.0, 5.0, 0.01,   (void*)&tremrate,    false,  IS_FLOAT);
+        param.registerParam("HP Resonance","Synth",0.0, 127.0, 0.0, 1.0,  (void*)&hpresonance,   false,  IS_FLOAT);
+        param.registerParam("HP Cutoff",  "Synth", 0.0, 127.0, 127.0, 1.0,(void*)&hpcutoff,      false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -57,6 +59,8 @@
             adj_set_value(VibRate->adj, vibrate);
             adj_set_value(TremDepth->adj, tremdepth);
             adj_set_value(TremRate->adj, tremrate);
+            adj_set_value(HpResonance->adj, hpresonance);
+            adj_set_value(HpCutOff->adj, hpcutoff);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -65,8 +69,8 @@
             synth.setRootFreq(frequency);
             synth.setLoop(useLoop);
             gain = std::pow(1e+01, 0.05 * volume);
-            synth.setReso(resonance);
-            synth.setCutoff(cutoff);
+            synth.setResoLP(resonance);
+            synth.setCutoffLP(cutoff);
             synth.setPmFreq(pmfreq);
             synth.setPmDepth(pmdepth);
             synth.setPmMode(pmmode);
@@ -74,6 +78,8 @@
             synth.setvibRate(vibrate);
             synth.settremDepth(tremdepth);
             synth.settremRate(tremrate);
+            synth.setResoHP(hpresonance);
+            synth.setCutoffHP(hpcutoff);
         }
     }
 
@@ -203,7 +209,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 7; // guard for future proof
+        header.version = 9; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -228,6 +234,14 @@
         out.write(&pmfreq, sizeof(pmfreq));
         out.write(&pmdepth, sizeof(pmdepth));
         out.write(&pmmode, sizeof(pmmode));
+        // since version 8
+        out.write(&pmfreq, sizeof(vibdepth));
+        out.write(&pmdepth, sizeof(vibrate));
+        out.write(&pmmode, sizeof(tremdepth));
+        out.write(&pmmode, sizeof(tremrate));
+        // since version 9
+        out.write(&pmfreq, sizeof(hpresonance));
+        out.write(&pmdepth, sizeof(hpcutoff));
 
         writeSamples(out, af.samples, af.samplesize);
     }
@@ -257,8 +271,9 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 7) {
+        if (header.version > 9) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
+            return false;
         }
 
         af.channels = 1;
@@ -287,6 +302,16 @@
             in.read(&pmfreq, sizeof(pmfreq));
             in.read(&pmdepth, sizeof(pmdepth));
             in.read(&pmmode, sizeof(pmmode));
+        }
+        if (header.version > 7) {
+            in.read(&pmfreq, sizeof(vibdepth));
+            in.read(&pmdepth, sizeof(vibrate));
+            in.read(&pmmode, sizeof(tremdepth));
+            in.read(&pmmode, sizeof(tremrate));
+        }
+        if (header.version > 8) {
+            in.read(&pmfreq, sizeof(hpresonance));
+            in.read(&pmdepth, sizeof(hpcutoff));
         }
 
         readSamples(in, af.samples, af.samplesize);

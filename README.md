@@ -6,35 +6,38 @@ Loopino is available as standalone application, as Clap plugin and as vst2 plugi
 
 ## Features
 
-- ADSR
-- load Samples by drag and drop
-- integrated file browser
-- record and use Samples on the fly
-- trim Samples to clip marks
-- integrated non destructive fade out option
-- integrated Pitch tracker 
-- integrated Micro Loop Generator
-- option to select Loop duration
-- integrated non destructive wave sharpers ( square - saw tooth )
-- Preset handling 
-- export wav files from the Samples/Loops processed with the selected Key Note
-- Ladder filter (resonance, cutoff)
-- Phase Modulators (sine, triangle, noise, juno)
-- vibrato
-- tremolo
-- synth root frequency control
-- up to 48 voices
-
-
 Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun.
 
 <p align="center">
     <img src="https://github.com/brummer10/Loopino/blob/main/loopino.png?raw=true" />
 </p>
 
+## Key Features
+
+- Drag-and-drop sample loading
+- Integrated file browser
+- On-the-fly audio recording
+- Trim samples to clip marks
+- Non-destructive fade-out processing
+- Integrated pitch tracker
+- Micro Loop Generator with selectable loop number & duration
+- Square & sawtooth wave sharpers (non-destructive)
+- Full ADSR envelope
+- Preset save/load system
+- Export processed samples/loops as WAV in selected key
+- LP/HP ladder filter with resonance & cutoff
+- Phase modulators: sine, triangle, noise & Juno-style
+- Vibrato & tremolo
+- Root frequency control
+- Up to 48 voices for polyphonic playback
+
 
 The GUI is created with libxputty.
 
+## Availability
+
+- Linux: Standalone application, CLAP plugin, VST2 plugin
+- Windows: CLAP plugin, VST2 plugin
 
 ## Dependencies
 

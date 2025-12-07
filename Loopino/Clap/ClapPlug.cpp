@@ -452,9 +452,9 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
                     plug->r->loadPresetNum((int)(ev->data[1]));
                 } else if ((ev->data[0] & 0xf0) == 0xb0) {   // controller
                     if (ev->data[1]== 71) {
-                        plug->r->synth.setReso((int)ev->data[2]);
+                        plug->r->synth.setResoLP((int)ev->data[2]);
                     } else if (ev->data[1]== 74) {
-                        plug->r->synth.setCutoff((int)ev->data[2]);
+                        plug->r->synth.setCutoffLP((int)ev->data[2]);
                     }
                 } else if ((ev->data[0] & 0xf0) == 0x90) {   // Note On
                     int velocity = (int)ev->data[2];
