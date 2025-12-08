@@ -97,11 +97,14 @@ ifeq ($(TARGET), Linux)
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
 	endif
+	ifeq ($(PAWPAW_BUILD),1)
+		LDFLAGS += -static-libgcc -static-libstdc++
+	endif
 	GUI_LDFLAGS += -I. -I$(HEADER_DIR) \
 	-L. $(LIB_DIR)libxputty.a  `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11` -lm
 else ifeq ($(TARGET), Windows)
 
-	CXXFLAGS += -MMD -std=c++20 -DALVER=\"$(VER)\" $(CFLAGS)
+	CXXFLAGS += -MMD -std=c++20 -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
 	LDFLAGS += -I. -lm -pthread -lpthread  $(PAWPAW_LFLAGS) `$(PKGCONFIG) --cflags --libs $(USEAPI) sndfile fftw3f`
 

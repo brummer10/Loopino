@@ -524,28 +524,28 @@ public:
     void setCutoffLP(int value) {
         value = std::clamp(value, 0, 127);
         filterLP.ccCutoff = value;
-        if (filterLP.ccCutoff == 127 || filterLP.ccReso == 0) filterLP.filterOff = true;
+        if (filterLP.ccCutoff == 127 && filterLP.ccReso == 0) filterLP.filterOff = true;
         else filterLP.filterOff = false;
     }
 
     void setResoLP(int value) {
         value = std::clamp(value, 0, 127);
         filterLP.ccReso   = value;
-        if (filterLP.ccCutoff == 127 || filterLP.ccReso == 0) filterLP.filterOff = true;
+        if (filterLP.ccCutoff == 127 && filterLP.ccReso == 0) filterLP.filterOff = true;
         else filterLP.filterOff = false;
     }
 
     void setCutoffHP(int value) {
         value = std::clamp(value, 0, 127);
         filterHP.ccCutoff = value;
-        if (filterHP.ccCutoff == 0 || filterHP.ccReso == 0) filterHP.filterOff = true;
+        if (filterHP.ccCutoff == 0 && filterHP.ccReso == 0) filterHP.filterOff = true;
         else filterHP.filterOff = false;
     }
 
     void setResoHP(int value) {
         value = std::clamp(value, 0, 127);
         filterHP.ccReso   = value;
-        if (filterHP.ccCutoff == 0 || filterHP.ccReso == 0) filterHP.filterOff = true;
+        if (filterHP.ccCutoff == 0 && filterHP.ccReso == 0) filterHP.filterOff = true;
         else filterHP.filterOff = false;
     }
 
@@ -694,7 +694,7 @@ public:
         voices.reserve(maxVoices);
         for (size_t i = 0; i < maxVoices; ++i)
             voices.push_back(std::make_unique<SampleVoice>());
-        sampleRate = sr; 
+        sampleRate = sr;
         masterGain = (1.0f / std::sqrt((float)maxVoices));
         playLoop = false;
         for (auto& v : voices) {

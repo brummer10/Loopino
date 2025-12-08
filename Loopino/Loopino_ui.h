@@ -39,6 +39,7 @@
 #ifndef LOOPINO_H
 #define LOOPINO_H
 
+#if defined (RUN_AS_PLUGIN)
 struct StreamOut {
     virtual void write(const void* data, size_t size) = 0;
     virtual ~StreamOut() = default;
@@ -48,6 +49,7 @@ struct StreamIn {
     virtual void read(void* data, size_t size) = 0;
     virtual ~StreamIn() = default;
 };
+#endif
 
 /****************************************************************
     class Loopino - create the GUI for loopino
