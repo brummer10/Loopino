@@ -48,11 +48,20 @@ jobs:
         EOF
         cp Loopino/loopino.svg AppDir/loopino.svg
 
-    - name: Download linuxdeploy and AppImage plugin
+    - name: Download linuxdeploy
       run: |
         wget https://github.com/linuxdeploy/linuxdeploy/releases/latest/download/linuxdeploy-x86_64.AppImage
-        wget https://github.com/AppImage/linuxdeploy-plugin-appimage/releases/latest/download/linuxdeploy-plugin-appimage-x86_64.AppImage
-        chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-appimage-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage
+
+    - name: Build AppImage
+      env:
+        APPIMAGE_EXTRACT_AND_RUN: 1
+      run: |
+        ./linuxdeploy-x86_64.AppImage \
+          --appdir AppDir \
+          --desktop-file AppDir/loopino.desktop \
+          --icon-file AppDir/loopino.svg \
+          --output appimage
 
     - name: Build AppImage
       env:
