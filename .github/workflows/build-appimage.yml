@@ -1,0 +1,69 @@
+name: Build AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-22.04
+    permissions:
+        contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libsndfile1-dev \
+          libfftw3-dev \
+          libjack-jackd2-dev \
+          libcairo2-dev \
+          libx11-dev
+
+    - name: Build project
+      run: |
+        make
+
+    - name: Prepare AppDir structure
+      run: |
+        mkdir -p AppDir/usr/bin
+        cp bin/* AppDir/usr/bin/
+        cat > AppDir/loopino.desktop <<EOF
+        [Desktop Entry]
+        Name=Loopino
+        Exec=loopino
+        Icon=loopino
+        Type=Application
+        Categories=AudioVideo;
+        EOF
+        cp Loopino/loopino.svg AppDir/loopino.svg
+
+    - name: Download linuxdeploy and AppImage plugin
+      run: |
+        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        wget https://github.com/AppImage/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-appimage-x86_64.AppImage
+
+    - name: Build AppImage
+      env:
+        APPIMAGE_EXTRACT_AND_RUN: 1
+      run: |
+        ./linuxdeploy-x86_64.AppImage \
+          --appdir AppDir \
+          --desktop-file AppDir/loopino.desktop \
+          --icon-file AppDir/loopino.svg \
+          --output appimage
+
+    - name: Upload AppImage artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Loopino-x86_64.AppImage
+        path: Loopino-*.AppImage

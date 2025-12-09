@@ -72,6 +72,13 @@ void process_midi(void* midi_input_port_buf) {
             } else {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }
+        } else if ((in_event.buffer[0] & 0xf0) == 0xE0) {   // PitchBend
+            int lsb = in_event.buffer[1];
+            int msb = in_event.buffer[2];
+            int value14 = lsb | (msb << 7);  // 0...16383
+            float pitchwheel = (value14 - 8192) * 0.00012207; // 1/8192.0f;
+            ui.synth.setPitchWheel(pitchwheel);
+            wheel_set_value(ui.PitchWheel, pitchwheel);
         } else if ((in_event.buffer[0] & 0xf0) == 0x90) {   // Note On
             int velocity = in_event.buffer[2];
             if (velocity < 1) {

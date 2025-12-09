@@ -28,9 +28,12 @@
 class PitchTracker {
 public:
     PitchTracker() = default;
+    ~PitchTracker() = default;
 
+    static constexpr float THRESHOLD = 0.99f;
 
-    uint8_t getPitch( const float* buffer, size_t N, uint32_t channels,
+    // this works best with arbitrary sample buffers, while the next formula works better with loop buffers
+    static uint8_t getPitch( const float* buffer, size_t N, uint32_t channels,
             float sampleRate, int16_t* pitchCorrection = nullptr,
             float* frequency = nullptr, float minFreq = 20.0f,
             float maxFreq = 5000.0f) {
@@ -160,7 +163,153 @@ public:
         return static_cast<uint8_t>(midiNote);
     }
 
+    // this works best with loop buffers, while the former works better with arbitrary sample buffers 
+    static float analyseBuffer(float* buffer, int bufferSize, int samplerate, uint8_t& midikey) {
+        if (!buffer || bufferSize <= 0 || samplerate <= 0) {
+            midikey = 0;
+            return 0.0f;
+        }
+
+        float maxAbs = 0.0f;
+        for (int i = 0; i < bufferSize; ++i) {
+            float a = std::fabs(buffer[i]);
+            if (a > maxAbs) maxAbs = a;
+        }
+
+        float gain = 1.0f / maxAbs;
+        for (int i = 0; i < bufferSize; ++i) {
+            buffer[i] *= gain ;
+        }
+
+        int fftSize = 1;
+        while (fftSize < bufferSize) fftSize <<= 1;
+
+        float* fftwBufferTime = (float*)fftwf_malloc(fftSize * sizeof(float));
+        float* fftwBufferFreq = (float*)fftwf_malloc(fftSize * sizeof(float));
+        if (!fftwBufferTime || !fftwBufferFreq)
+            return 0.0f;
+
+        fftwf_plan fftPlan = fftwf_plan_r2r_1d(
+            fftSize, fftwBufferTime, fftwBufferFreq,
+            FFTW_R2HC, FFTW_ESTIMATE);
+        fftwf_plan ifftPlan = fftwf_plan_r2r_1d(
+            fftSize, fftwBufferFreq, fftwBufferTime,
+            FFTW_HC2R, FFTW_ESTIMATE);
+
+        memcpy(fftwBufferTime, buffer, bufferSize * sizeof(float));
+        if (fftSize > bufferSize)
+            memset(fftwBufferTime + bufferSize, 0, (fftSize - bufferSize) * sizeof(float));
+
+        fftwf_execute(fftPlan);
+
+        for (int k = 1; k < fftSize/2; ++k) {
+            fftwBufferFreq[k] = sq(fftwBufferFreq[k]) + sq(fftwBufferFreq[fftSize-k]);
+            fftwBufferFreq[fftSize-k] = 0.0f;
+        }
+        fftwBufferFreq[0]        = sq(fftwBufferFreq[0]);
+        fftwBufferFreq[fftSize/2]= sq(fftwBufferFreq[fftSize/2]);
+
+        fftwf_execute(ifftPlan);
+
+        double sumSq = 2.0 * static_cast<double>(fftwBufferTime[0]) / static_cast<double>(fftSize);
+        for (int k = 0; k < fftSize - bufferSize; k++)
+            fftwBufferTime[k] = fftwBufferTime[k + 1] / static_cast<float>(fftSize);
+
+        int count = (bufferSize + 1) / 2;
+        for (int k = 0; k < count; ++k) {
+            sumSq -= sq(buffer[bufferSize-1-k]) + sq(buffer[k]);
+            fftwBufferTime[k] = (sumSq > 0.0)? 2.0f * fftwBufferTime[k] / float(sumSq) : 0.0f;
+        }
+
+        int maxAutocorrIndex = findsubMaximum(fftwBufferTime, count, THRESHOLD);
+        float x = 0.0f;
+        float outFreq = 0.0f;
+
+        if (maxAutocorrIndex >= 1 && maxAutocorrIndex < count - 1) {
+            parabolaTurningPoint(
+                fftwBufferTime[maxAutocorrIndex-1],
+                fftwBufferTime[maxAutocorrIndex],
+                fftwBufferTime[maxAutocorrIndex+1],
+                maxAutocorrIndex+1, &x);
+            outFreq = samplerate / x;
+            if (outFreq > 999.0f || outFreq < 30.0f)
+                outFreq = 0.0f;
+        }
+
+        if (outFreq < 0.0f) {
+            float midiFloat = 69.0f + 12.0f * std::log2(outFreq / 440.0f);
+            int midiNote = static_cast<int>(std::floor(midiFloat + 0.5f));
+            midikey = std::clamp(midiNote, 0, 127);
+        }
+
+        fftwf_destroy_plan(fftPlan);
+        fftwf_destroy_plan(ifftPlan);
+        fftwf_free(fftwBufferTime);
+        fftwf_free(fftwBufferFreq);
+
+        return outFreq;
+    }
+
 private:
+    static float sq(float x) { return x*x; }
+
+    static void parabolaTurningPoint(float y_1, float y0, float y1, float xOffset, float* x) {
+        float yTop = y_1 - y1;
+        float yBottom = y1 + y_1 - 2 * y0;
+        if (yBottom != 0.0f)
+            *x = xOffset + yTop / (2 * yBottom);
+        else
+            *x = xOffset;
+    }
+
+    static int findMaxima(float* input, int len, int* maxPositions, int* length, int maxLen) {
+        int pos = 0;
+        int curMaxPos = 0;
+        int overallMaxIndex = 0;
+
+        while (pos < (len-1)/3 && input[pos] > 0.0) pos++;
+        while (pos < len-1 && input[pos] <= 0.0) pos++;
+        if (pos == 0) pos = 1;
+        while (pos < len-1) {
+            if (input[pos] > input[pos-1] && input[pos] >= input[pos+1]) {
+                if (curMaxPos == 0) curMaxPos = pos;
+                else if (input[pos] > input[curMaxPos]) curMaxPos = pos;
+            }
+            pos++;
+            if (pos < len-1 && input[pos] <= 0.0) {
+                if (curMaxPos > 0) {
+                    maxPositions[*length] = curMaxPos;
+                    (*length)++;
+                    if (overallMaxIndex == 0) overallMaxIndex = curMaxPos;
+                    else if (input[curMaxPos] > input[overallMaxIndex]) overallMaxIndex = curMaxPos;
+                    if (*length >= maxLen) return overallMaxIndex;
+                    curMaxPos = 0;
+                }
+                while (pos < len-1 && input[pos] <= 0.0) pos++;
+            }
+        }
+        if (curMaxPos > 0) {
+            maxPositions[*length] = curMaxPos;
+            (*length)++;
+            if (overallMaxIndex == 0) overallMaxIndex = curMaxPos;
+            else if (input[curMaxPos] > input[overallMaxIndex]) overallMaxIndex = curMaxPos;
+            curMaxPos = 0;
+        }
+        return overallMaxIndex;
+    }
+
+    static int findsubMaximum(float* input, int len, float threshold) {
+        int indices[10];
+        int length = 0;
+        int overallMaxIndex = findMaxima(input, len, indices, &length, 10);
+        if (length == 0) return -1;
+        threshold += (1.0f - threshold) * (1.0f - input[overallMaxIndex]);
+        float cutoff = input[overallMaxIndex] * threshold;
+        for (int j = 0; j < length; j++)
+            if (input[indices[j]] >= cutoff)
+                return indices[j];
+        return -1;
+    }
 
 };
 

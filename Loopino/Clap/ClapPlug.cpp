@@ -456,6 +456,14 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
                     } else if (ev->data[1]== 74) {
                         plug->r->synth.setCutoffLP((int)ev->data[2]);
                     }
+                } else if ((ev->data[0] & 0xf0) == 0xE0) {   // PitchBend
+                    int lsb = ev->data[1];
+                    int msb = ev->data[2];
+                    int value14 = lsb | (msb << 7);  // 0...16383
+                    float pitchwheel = (value14 - 8192) * 0.00012207; // 1/8192.0f;
+                    plug->r->synth.setPitchWheel(pitchwheel);
+                    if (plug->guiIsCreated)
+                        wheel_set_value(plug->r->PitchWheel, pitchwheel);
                 } else if ((ev->data[0] & 0xf0) == 0x90) {   // Note On
                     int velocity = (int)ev->data[2];
                     if (velocity < 1) {

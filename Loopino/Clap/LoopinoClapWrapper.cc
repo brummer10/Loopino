@@ -33,8 +33,9 @@
         param.registerParam("VibRate",   "Synth", 0.1, 12.0, 5.0, 0.01,   (void*)&vibrate,     false,  IS_FLOAT);
         param.registerParam("TremDepth", "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&tremdepth,   false,  IS_FLOAT);
         param.registerParam("TremRate",  "Synth", 0.1, 15.0, 5.0, 0.01,   (void*)&tremrate,    false,  IS_FLOAT);
-        param.registerParam("HP Resonance","Synth",0.0, 127.0, 0.0, 1.0,  (void*)&hpresonance,   false,  IS_FLOAT);
-        param.registerParam("HP Cutoff",  "Synth", 0.0, 127.0, 127.0, 1.0,(void*)&hpcutoff,      false,  IS_FLOAT);
+        param.registerParam("HP Resonance","Synth",0.0, 127.0, 0.0, 1.0,  (void*)&hpresonance, false,  IS_FLOAT);
+        param.registerParam("HP Cutoff",  "Synth", 0.0, 127.0, 127.0, 1.0,(void*)&hpcutoff,    false,  IS_FLOAT);
+        param.registerParam("Pitch Bend", "Synth", -1.0, 1.0, 0.0, 0.01,  (void*)&pitchwheel,  false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -61,6 +62,7 @@
             adj_set_value(TremRate->adj, tremrate);
             adj_set_value(HpResonance->adj, hpresonance);
             adj_set_value(HpCutOff->adj, hpcutoff);
+            wheel_set_value(PitchWheel,pitchwheel);
         } else {
             synth.setAttack(attack);
             synth.setDecay(decay);
@@ -80,6 +82,7 @@
             synth.settremRate(tremrate);
             synth.setResoHP(hpresonance);
             synth.setCutoffHP(hpcutoff);
+            synth.setPitchWheel(pitchwheel);
         }
     }
 
@@ -316,7 +319,6 @@
 
         readSamples(in, af.samples, af.samplesize);
         havePresetToLoad = true;
-        haveDefault = false;
         return true;
     }
 

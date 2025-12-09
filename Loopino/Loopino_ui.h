@@ -31,6 +31,8 @@
 #include "Parameter.h"
 
 #include "TextEntry.h"
+#include "Wheel.h"
+
 #include "xwidgets.h"
 #include "xfile-dialog.h"
 #include "xmessage-dialog.h"
@@ -62,6 +64,7 @@ public:
     Widget_t *w_top;
     Widget_t *w;
     Widget_t *lw;
+    Widget_t *PitchWheel;
     Widget_t *keyboard;
     ParallelThread pa;
     ParallelThread fetch;
@@ -113,7 +116,6 @@ public:
     bool play_loop;
     bool ready;
     bool havePresetToLoad;
-    bool haveDefault;
     bool record;
 
     Loopino() : af() {
@@ -134,7 +136,6 @@ public:
         play_loop = false;
         ready = true;
         havePresetToLoad = false;
-        haveDefault = true;
         record = false;
         matches = 0;
         currentLoop = 0;
@@ -168,12 +169,12 @@ public:
         vibrate = 5.0f;
         tremdepth = 0.0f;
         tremrate = 5.0f;
+        pitchwheel = 0.5f;
         pmmode = 0;
         useLoop = 0;
         timer = 30;
         generateKeys();
         guiIsCreated = false;
-        analyseBuffer = new float[40960];
         #if defined (RUN_AS_PLUGIN)
         registerParameters();
         #endif
@@ -181,7 +182,6 @@ public:
 
     ~Loopino() {
         pa.stop();
-        delete[] analyseBuffer;
     };
 
 /****************************************************************
@@ -410,15 +410,17 @@ public:
         setLoopSize->func.value_changed_callback = setLoopSize_callback;
         commonWidgetSettings(setLoopSize);
 
-        setPrevLoop = add_button(frame, "<", 95, 20, 35, 35);
+        setPrevLoop = add_button(frame, "", 95, 20, 35, 35);
         setPrevLoop->scale.gravity = SOUTHWEST;
+        widget_get_png(setPrevLoop, LDVAR(prev_png));
         setPrevLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setPrevLoop, "Load previous loop");
         setPrevLoop->func.value_changed_callback = setPrevLoop_callback;
         commonWidgetSettings(setPrevLoop);
 
-        setNextLoop = add_button(frame, ">", 130, 20, 35, 35);
+        setNextLoop = add_button(frame, "", 130, 20, 35, 35);
         setNextLoop->scale.gravity = SOUTHWEST;
+        widget_get_png(setNextLoop, LDVAR(next_png));
         setNextLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
@@ -688,6 +690,14 @@ public:
         TremRate->func.value_changed_callback = tremrate_callback;
         commonWidgetSettings(TremRate);
 
+        PitchWheel = add_wheel(lw, "", 410, 230, 20, 75);
+        PitchWheel->parent_struct = (void*)this;
+        PitchWheel->scale.gravity = SOUTHWEST;
+        PitchWheel->flags |= HAS_TOOLTIP;
+        add_tooltip(PitchWheel, "Pitch Bend");
+        PitchWheel->func.value_changed_callback = wheel_callback;
+        commonWidgetSettings(PitchWheel);
+
         keyboard = add_midi_keyboard(w_top, "Organ", 0, 310, 880, 80);
         keyboard->flags |= HIDE_ON_DELETE;
         //keyboard->scale.gravity = SOUTHCENTER;
@@ -786,10 +796,11 @@ private:
     float vibrate;
     float tremdepth;
     float tremrate;
+    float pitchwheel;
     int pmmode;
     int useLoop;
     
-    float *analyseBuffer;
+    std::vector<float> analyseBuffer;
 
 /****************************************************************
                     Create loop samples
@@ -835,10 +846,6 @@ private:
         pitchCorrection = 0;
         rootkey = 0;
         if (af.samples) rootkey = pt.getPitch(af.samples, af.samplesize , af.channels, (float)jack_sr, &pitchCorrection, &freq);
-        if (haveDefault) {
-            freq = 440.0f;
-            rootkey = 69;
-        }
     }
 
     bool createLoop() {
@@ -1060,16 +1067,14 @@ private:
         loopData->rootFreq = (double)freq;
         lbank.addSample(std::const_pointer_cast<const SampleInfo>(loopData));
         synth.setLoopBank(&lbank);
-        memset(analyseBuffer, 0, 40960 * sizeof(float));
-        synth.getAnalyseBuffer(analyseBuffer, 40960);
-        loopRootkey = pt.getPitch(analyseBuffer,
-                        40960, 1, (float)jack_sr, &loopPitchCorrection, &loopFreq);
-        if (haveDefault) {
-            loopFreq = 440.0f;
-            loopRootkey = 69;
-        }
+        analyseBuffer.clear();
+        analyseBuffer.resize(40960);
+        synth.getAnalyseBuffer(analyseBuffer.data(), 40960);
+        loopFreq = pt.analyseBuffer(analyseBuffer.data(), 40960, jack_sr, loopRootkey);
         double cor = loopFreq / 440.0f;
-        //lbank.clear();
+        float midiFloat = 69.0f + 12.0f * std::log2((freq * cor) / 440.0f);
+        int midiNote = static_cast<int>(std::floor(midiFloat + 0.5f));
+        loopRootkey = std::clamp(midiNote, 0, 127);
         loopData->data = loopBuffer;
         loopData->sourceRate = (double)jack_sr;
         loopData->rootFreq = (double)(freq * cor);
@@ -1113,7 +1118,6 @@ private:
         if (!af.samples) return;
         play = false;
         ready = false;
-        haveDefault = false;
         uint32_t new_size = (loopPoint_r-loopPoint_l) * af.channels;
         delete[] af.saveBuffer;
         af.saveBuffer = nullptr;
@@ -1181,7 +1185,6 @@ private:
         load_soundfile(file);
         is_loaded = false;
         loadNew = true;
-        haveDefault = false;
         if (af.samples) {
             std::filesystem::path p = file;
             if (guiIsCreated) {
@@ -1204,7 +1207,6 @@ private:
     }
 
     void generateSine() {
-        haveDefault = true;
         int new_size = static_cast<int>(4.0 * jack_sr);
         delete[] af.samples;
         af.samples = nullptr;
@@ -1255,7 +1257,6 @@ private:
         loopPoint_r = af.samplesize;
         position = 0;
         play = false;
-        haveDefault = false;
         if (guiIsCreated) {
             loadNew = true;
             update_waveview(wview, af.samples, af.samplesize);
@@ -1263,7 +1264,6 @@ private:
     }
 
     void set_record() {
-        haveDefault = false;
         timer = 30;
         position = 0;
         if (guiIsCreated) {
@@ -1386,6 +1386,7 @@ private:
             adj_set_value(Record->adj, 0.0);
             expose_widget(Record);
         }
+        wheel_idle_callback(PitchWheel, nullptr);
         expose_widget(keyboard);
         expose_widget(wview);
         #if defined(__linux__) || defined(__FreeBSD__) || \
@@ -1458,9 +1459,7 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->loopPeriods = (int)(adj_get_value(w->adj));
         self->markDirty(7);
-        self->synth.allNoteOff();
         if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
-        self->synth.allNoteOff();
     }
 
     // set next Loop
@@ -1840,6 +1839,16 @@ private:
         self->tremrate = adj_get_value(w->adj);
         self->markDirty(18);
         self->synth.settremRate(self->tremrate);
+    }
+
+    // Pitch wheel control
+    static void wheel_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        Wheel *wheel = (Wheel*)w->private_struct;
+        self->pitchwheel = wheel->value;
+        self->markDirty(19);
+        self->synth.setPitchWheel(self->pitchwheel);
     }
 
     // volume control
@@ -2663,7 +2672,6 @@ private:
         loadLoopNew = true;
         //loadNew = true;
        // update_waveview(wview, af.samples, af.samplesize);
-        haveDefault = false;
         loadPresetToSynth();
         std::filesystem::path p = filename;
         presetName = p.stem().string();

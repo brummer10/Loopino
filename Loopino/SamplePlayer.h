@@ -520,6 +520,12 @@ public:
     void settremRate(float r) {player.tremRate = r;}
 
     void setRootFreq(float freq_) {freq = freq_;}
+    void setPitchWheel(float f) {
+        float semitones = f * 2.0f;
+        float factor = pow(2.0, semitones / 12.0);
+        pitch = freq * factor - freq;
+        player.setFrequency(midiToFreq(midiNote), rootFreq);
+    }
 
     void setCutoffLP(int value) {
         value = std::clamp(value, 0, 127);
@@ -559,6 +565,7 @@ public:
                 double sourceRate, double rootFreq, bool looping = true) {
 
         this->midiNote = midiNote;
+        this->rootFreq = rootFreq;
         active = true;
         vel = velocity;
         player.setSample(sampleData, sourceRate);
@@ -632,7 +639,9 @@ private:
     bool looping = true;
     float vel = 1.0f;
     float freq = 440.0f;
+    float pitch = 0.0f;
     int midiNote = -1;
+    double rootFreq = 440.0;
 
     double pmFreq = 0.0;
     double pmDepth = 0.0;
@@ -653,7 +662,7 @@ private:
     }
 
     inline double midiToFreq(int midiNote) {
-        return  freq * std::pow(2.0, (midiNote - 69) / 12.0);
+        return  (freq + pitch) * std::pow(2.0, (midiNote - 69 ) / 12.0);
     }
 
     void recalcFilter(LadderFilter& filter) {
@@ -689,7 +698,6 @@ public:
     PolySynth() {}
 
     void init(double sr, size_t maxVoices = 8) {
-        //voices.resize(maxVoices);
         voices.clear();
         voices.reserve(maxVoices);
         for (size_t i = 0; i < maxVoices; ++i)
@@ -747,6 +755,12 @@ public:
     void setRootFreq(float freq) {
         for (auto& v : voices) {
             v->setRootFreq(freq);
+        }
+    }
+
+    void setPitchWheel(float f) {
+        for (auto& v : voices) {
+            v->setPitchWheel(f);
         }
     }
 

@@ -211,20 +211,22 @@ $(RESAMP_LIB): $(RESAMP_OBJ)
 
 $(NAME).clap:  $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME).clap
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) -o $(NAME).clap $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
 endif
 
 $(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
 	@$(B_ECHO) "Compiling $(NAME)vst.$(LIB_EXT) $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -L. $(RESAMP_LIB) $(GUI_LDFLAGS) $(LDFLAGS) -o $(NAME)vst.$(LIB_EXT)
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -L. $(RESAMP_LIB) -o $(NAME)vst.$(LIB_EXT) $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME)vst.$(LIB_EXT)
 endif
 
 $(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h
 	@$(B_ECHO) "Build $@ $(reset)"
+	$(info $(yellow) INFO: $(reset) cxxflags $(blue) $(CXX) $(CXXFLAGS) $(reset))
+	$(info $(yellow) INFO: $(reset) ldflags  $(blue) $(LDFLAGS) $(GUI_LDFLAGS))
 	$(QUIET)$(CXX) -MMD $(CXXFLAGS) $(OBJECTS) -L. $(RESAMP_LIB) -o $(NAME)$(EXE) $(LDFLAGS) $(GUI_LDFLAGS)
 ifneq ($(MAKECMDGOALS),debug)
 	$(QUIET)$(STRIP) -s -x -X -R .note.ABI-tag $(NAME)$(EXE)
