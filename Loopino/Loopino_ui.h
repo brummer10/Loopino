@@ -293,6 +293,7 @@ public:
         loopMark_L->adj_x = add_adjustment(loopMark_L,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
         loopMark_L->adj = loopMark_L->adj_x;
         add_tooltip(loopMark_L, "Set left clip point ");
+        os_set_window_attrb(loopMark_L);
         loopMark_L->func.expose_callback = draw_slider;
         loopMark_L->func.button_release_callback = slider_l_released;
         loopMark_L->func.motion_callback = move_loopMark_L;
@@ -304,6 +305,7 @@ public:
         loopMark_R->adj_x = add_adjustment(loopMark_R,0.0, 0.0, -1000.0, 0.0,1.0, CL_METER);
         loopMark_R->adj = loopMark_R->adj_x;
         add_tooltip(loopMark_R, "Set right clip point ");
+        os_set_window_attrb(loopMark_R);
         loopMark_R->func.expose_callback = draw_slider;
         loopMark_R->func.button_release_callback = slider_r_released;
         loopMark_R->func.motion_callback = move_loopMark_R;
@@ -1589,6 +1591,8 @@ private:
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
         st = std::clamp(st, 0.0f, 0.99f);
+        float st_ = adj_get_state(w->adj);
+        st = std::clamp(st, st_ - 0.01f, st_ + 0.01f);
         adj_set_state(w->adj, st);
     }
 
@@ -1642,6 +1646,8 @@ private:
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
         st = std::clamp(st, 0.01f, 1.0f);
+        float st_ = adj_get_state(w->adj);
+        st = std::clamp(st, st_ - 0.01f, st_ + 0.01f);
         adj_set_state(w->adj, st);
     }
 
