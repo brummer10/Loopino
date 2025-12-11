@@ -29,7 +29,7 @@ jobs:
             software-properties-common
 
       - name: Checkout
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
@@ -62,7 +62,7 @@ jobs:
             software-properties-common
 
       - name: Checkout
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
@@ -96,7 +96,7 @@ jobs:
             software-properties-common
 
       - name: Checkout
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
