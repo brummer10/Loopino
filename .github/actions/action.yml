@@ -72,11 +72,9 @@ runs:
       if: ${{ runner.os == 'Linux' && env.UBUNTU_VERSION == '20.04' }}
       shell: bash
       run: |
-        sudo rm /etc/apt/sources.list.d/*.list
-        sudo apt-get update -qq
-        sudo apt-get purge -yqq git-man libclang* libgbm* libllvm* libmono* libnginx* moby* mono* nginx* perl php* libgdiplus libpcre2-posix3 libselinux1-dev libzip4
-        sudo apt-get install -yqq --allow-downgrades autoconf/focal automake/focal build-essential/focal git/focal libgd3/focal libglib2.0-0/focal libglib2.0-dev/focal libpcre2-8-0/focal libpcre2-16-0/focal libpcre2-32-0/focal libpcre2-posix2/focal pkg-config/focal libjack-jackd2-dev/focal
-        sudo apt-get clean
+        apt-get update -qq
+        apt-get install -yqq --allow-downgrades autoconf/focal automake/focal build-essential/focal git/focal libgd3/focal libglib2.0-0/focal libglib2.0-dev/focal libpcre2-8-0/focal libpcre2-16-0/focal libpcre2-32-0/focal libpcre2-posix2/focal pkg-config/focal libjack-jackd2-dev/focal
+        apt-get clean
     - name: Fix GitHub's mess (ubuntu-22.04)
       if: ${{ runner.os == 'Linux' && env.UBUNTU_VERSION == '22.04' }}
       shell: bash
