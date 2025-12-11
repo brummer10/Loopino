@@ -67,6 +67,18 @@ runs:
         echo "PAWPAW_SKIP_GLIB=${PAWPAW_SKIP_GLIB:=1}" >> $GITHUB_ENV
         echo "PAWPAW_SKIP_LV2=${PAWPAW_SKIP_LV2:=1}" >> $GITHUB_ENV
 
+    - name: Pressed tzdata and force non-interactive apt
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        echo "tzdata tzdata/Areas select Europe" | sudo debconf-set-selections
+        echo "tzdata tzdata/Zones/Europe select Berlin" | sudo debconf-set-selections
+        sudo apt-get update -qq
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o DPkg::Options::="--force-confdef" -o DPkg::Options::="--force-confold" tzdata || true
+        sudo apt --fix-broken install -y || true
+        sudo dpkg --configure -a || true
+
     - name: Detect container environment and skip flag
       shell: bash
       run: |
