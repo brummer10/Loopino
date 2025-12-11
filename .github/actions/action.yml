@@ -67,33 +67,45 @@ runs:
         echo "PAWPAW_SKIP_GLIB=${PAWPAW_SKIP_GLIB:=1}" >> $GITHUB_ENV
         echo "PAWPAW_SKIP_LV2=${PAWPAW_SKIP_LV2:=1}" >> $GITHUB_ENV
 
-    - name: Pressed tzdata and force non-interactive apt
+    - name: Preseed tzdata, ensure noninteractive apt and quick repair
       if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: |
+        # ensure noninteractive (some sudo's don't preserve env)
         export DEBIAN_FRONTEND=noninteractive
+        echo "DEBIAN_FRONTEND=${DEBIAN_FRONTEND}" >> $GITHUB_ENV
+
+        # Preseed tzdata so tzdata doesn't prompt interactively
         echo "tzdata tzdata/Areas select Europe" | sudo debconf-set-selections
         echo "tzdata tzdata/Zones/Europe select Berlin" | sudo debconf-set-selections
-        sudo apt-get update -qq
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -o DPkg::Options::="--force-confdef" -o DPkg::Options::="--force-confold" tzdata || true
-        sudo apt --fix-broken install -y || true
+
+        # quick update and try to repair any half-configured packages
+        sudo apt-get update -qq || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" \
+          -o Dpkg::Options::="--force-confold" --fix-broken install || true
         sudo dpkg --configure -a || true
 
-    - name: Detect container environment and skip flag
+    - name: Run debug apt/dpkg probe (writes detailed output to log)
+      if: ${{ runner.os == 'Linux' }}
       shell: bash
       run: |
-        # Default: do not skip
-        SKIP=0
-        # If input explicitly requests skipping, honor it
-        if [ "${{ inputs.skip_system_fix }}" = "true" ]; then
-          SKIP=1
-        fi
-        # Auto-detect common container indicators (Docker, Podman, systemd-nspawn, kubernetes)
-        if [ -f /.dockerenv ] || [ -f /run/.containerenv ] || grep -qE '/docker/|/lxc/|/kubepods' /proc/1/cgroup 2>/dev/null; then
-          SKIP=1
-        fi
-        echo "SKIP_SYSTEM_FIX=${SKIP}" >> $GITHUB_ENV
-        echo "Detected container/skip_system_fix=${SKIP}"
+        chmod +x ./.github/actions/debug-apt.sh
+        sudo ./.github/actions/debug-apt.sh || true
+        - name: Detect container environment and skip flag
+          shell: bash
+          run: |
+            # Default: do not skip
+            SKIP=0
+            # If input explicitly requests skipping, honor it
+            if [ "${{ inputs.skip_system_fix }}" = "true" ]; then
+              SKIP=1
+            fi
+            # Auto-detect common container indicators (Docker, Podman, systemd-nspawn, kubernetes)
+            if [ -f /.dockerenv ] || [ -f /run/.containerenv ] || grep -qE '/docker/|/lxc/|/kubepods' /proc/1/cgroup 2>/dev/null; then
+              SKIP=1
+            fi
+            echo "SKIP_SYSTEM_FIX=${SKIP}" >> $GITHUB_ENV
+            echo "Detected container/skip_system_fix=${SKIP}"
 
     - name: Fix GitHub's mess (detect version)
       if: ${{ runner.os == 'Linux' && env.SKIP_SYSTEM_FIX != '1' }}
@@ -185,13 +197,6 @@ runs:
       with:
         path: ~/PawPawBuilds
         key: pawpaw-${{ inputs.target }}-v${{ env.PAWPAW_CACHE_VERSION }}-${{ inputs.lto }}
-
-    - name: Debug APT / DPKG before installing deps
-      if: ${{ runner.os == 'Linux' }}
-      shell: bash
-      run: |
-        chmod +x ./.github/actions/debug-apt.sh
-        sudo ./.github/actions/debug-apt.sh
 
     # setup dependencies
     - name: Setup dependencies (linux-arm64)

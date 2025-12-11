@@ -1,29 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# robust non-interactive env
 export DEBIAN_FRONTEND=noninteractive
-echo "DEBIAN_FRONTEND=$DEBIAN_FRONTEND"
 
-echo "=== Date: $(date) : APT / DPKG debugging info ==="
-
-echo -e "\n--- /etc/apt/sources.list.d ---"
-ls -la /etc/apt/sources.list.d || true
+echo "=== APT / DPKG debug: $(date) ==="
 
 echo -e "\n--- /etc/apt/sources.list ---"
 cat /etc/apt/sources.list || true
 
-echo -e "\n--- apt list --installed (top 80) ---"
-dpkg --get-selections | head -n 80 || true
+echo -e "\n--- /etc/apt/sources.list.d ---"
+ls -la /etc/apt/sources.list.d || true
 
-echo -e "\n--- dpkg audit (if half-configured) ---"
+echo -e "\n--- dpkg audit ---"
 dpkg --audit || true
+
+echo -e "\n--- dpkg selections (top 120) ---"
+dpkg --get-selections | head -n 120 || true
 
 echo -e "\n--- apt-cache policy summary ---"
 apt-cache policy || true
 
-# show policy for likely problematic packages
-for pkg in libltdl-dev libltdl7 libtool automake; do
+for pkg in libltdl-dev libltdl7 libtool automake tzdata; do
   echo -e "\n--- apt-cache policy ${pkg} ---"
   apt-cache policy "${pkg}" || true
 done
@@ -31,13 +28,14 @@ done
 echo -e "\n--- apt-get update ---"
 apt-get update -qq || true
 
-echo -e "\n--- Simulate install with problem-resolver debug for libltdl-dev ---"
+echo -e "\n--- Simulate install (pkg resolver debug) for libltdl-dev ---"
 apt-get -s -o Debug::pkgProblemResolver=yes install libltdl-dev || true
 
-echo -e "\n--- Try fix-broken in simulation ---"
+echo -e "\n--- Simulate fix-broken ---"
 apt-get -s -o Debug::pkgProblemResolver=yes --fix-broken install || true
 
-echo -e "\n--- dpkg --configure -a (dry-run show) ---"
+echo -e "\n--- Try fix-broken (non-simulated) to report output ---"
+apt-get -y --fix-broken install || true
 dpkg --configure -a || true
 
 echo -e "\n=== End debug ==="
