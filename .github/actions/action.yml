@@ -40,7 +40,7 @@ inputs:
     required: false
     default: ''
   skip_system_fix:
-    description: 'Skip the "Fix GitHub\\'s mess" apt/systemd modifications (auto-detected when running inside a container). Set true to force skip.'
+    description: 'Skip the apt/systemd modifications when running inside a container. Set true to force skip.'
     required: false
     default: ''
 
