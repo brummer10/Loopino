@@ -186,6 +186,13 @@ runs:
         path: ~/PawPawBuilds
         key: pawpaw-${{ inputs.target }}-v${{ env.PAWPAW_CACHE_VERSION }}-${{ inputs.lto }}
 
+    - name: Debug APT / DPKG before installing deps
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        chmod +x ./.github/actions/debug-apt.sh
+        sudo ./.github/actions/debug-apt.sh
+
     # setup dependencies
     - name: Setup dependencies (linux-arm64)
       if: ${{ inputs.target == 'linux-arm64' }}
