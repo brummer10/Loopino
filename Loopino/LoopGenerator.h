@@ -129,7 +129,7 @@ private:
         std::vector<ZeroCross> zeros;
         zeros.reserve(numFrames / 10);
 
-        for (size_t i = startFrames; i < endFrames; ++i) {
+        for (size_t i = startFrames + 1; i < endFrames; ++i) {
             float prev = buffer[(i - 1) * numChannels];
             float curr = buffer[i * numChannels];
 

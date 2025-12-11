@@ -121,7 +121,7 @@ static void wheel_draw(void *w_, void *user_data) {
     round_rectangle(crb, notch_x+2.0f,
                     notch_y - wheel_h*0.045f,
                     notch_w,
-                    wheel_h*0.06f,
+                    wheel_h*0.06f - fabsf(wheel->value),
                     wheel_h*0.035f);
     cairo_fill(crb);
 }

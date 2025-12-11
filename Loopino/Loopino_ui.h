@@ -290,7 +290,7 @@ public:
         loopMark_L = add_hslider(w, "",15, 2, 18, 18);
         loopMark_L->scale.gravity = NONE;
         loopMark_L->parent_struct = (void*)this;
-        loopMark_L->adj_x = add_adjustment(loopMark_L,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
+        set_adjustment(loopMark_L->adj_x,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
         loopMark_L->adj = loopMark_L->adj_x;
         add_tooltip(loopMark_L, "Set left clip point ");
         os_set_window_attrb(loopMark_L);
@@ -302,7 +302,7 @@ public:
         loopMark_R = add_hslider(w, "",415, 2, 18, 18);
         loopMark_R->scale.gravity = NONE;
         loopMark_R->parent_struct = (void*)this;
-        loopMark_R->adj_x = add_adjustment(loopMark_R,0.0, 0.0, -1000.0, 0.0,1.0, CL_METER);
+        set_adjustment(loopMark_R->adj_x,0.0, 0.0, -1000.0, 0.0,1.0, CL_METER);
         loopMark_R->adj = loopMark_R->adj_x;
         add_tooltip(loopMark_R, "Set right clip point ");
         os_set_window_attrb(loopMark_R);
@@ -1579,11 +1579,12 @@ private:
         Widget_t *w = (Widget_t*)w_;
         XMotionEvent *xmotion = (XMotionEvent*)xmotion_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        Widget_t *p = (Widget_t*)w->parent;
-        int x1, y1;
-        os_translate_coords(w, w->widget, p->widget, xmotion->x, 0, &x1, &y1);
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        int x2 = metrics.x;
+        x2 += xmotion->x;
         int width = self->w->width-40;
-        int pos = max(15, min (width+15,x1-5));
+        int pos = max(15, min (width+15,x2-5));
         float st =  (float)( (float)(pos-15.0)/(float)width);
         uint32_t lp = (self->af.samplesize) * st;
         if (lp > self->position) {
@@ -1634,11 +1635,12 @@ private:
         Widget_t *w = (Widget_t*)w_;
         XMotionEvent *xmotion = (XMotionEvent*)xmotion_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        Widget_t *p = (Widget_t*)w->parent;
-        int x1, y1;
-        os_translate_coords(w, w->widget, p->widget, xmotion->x, 0, &x1, &y1);
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        int x2 = metrics.x;
+        x2 += xmotion->x;
         int width = self->w->width-40;
-        int pos = max(15, min (width+15,x1-5));
+        int pos = max(15, min (width+15,x2-5));
         float st =  (float)( (float)(pos-15.0)/(float)width);
          uint32_t lp = (self->af.samplesize * st);
         if (lp < self->position) {
