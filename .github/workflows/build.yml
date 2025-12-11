@@ -21,9 +21,12 @@ jobs:
 
     steps:
       - name: Prepare system
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update -qq
           apt-get install -yqq \
+            tzdata \
             git ca-certificates build-essential \
             pkg-config curl wget unzip \
             software-properties-common
@@ -54,9 +57,12 @@ jobs:
 
     steps:
       - name: Prepare system
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update -qq
           apt-get install -yqq \
+            tzdata \
             git ca-certificates build-essential \
             pkg-config curl wget unzip \
             software-properties-common
@@ -88,9 +94,12 @@ jobs:
 
     steps:
       - name: Prepare system
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update -qq
           apt-get install -yqq \
+            tzdata \
             git ca-certificates build-essential \
             pkg-config curl wget unzip \
             software-properties-common
