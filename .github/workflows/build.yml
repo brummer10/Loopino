@@ -15,15 +15,15 @@ jobs:
     container:
       image: ubuntu:20.04
 
+    permissions:
+        contents: write
+
     steps:
       - name: Install git inside container
         run: |
           apt-get update
           apt-get install -y git
 
-    permissions:
-        contents: write
-    steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -43,15 +43,15 @@ jobs:
     container:
       image: ubuntu:20.04
 
+    permissions:
+        contents: write
+
     steps:
       - name: Install git inside container
         run: |
           apt-get update
           apt-get install -y git
 
-    permissions:
-        contents: write
-    steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -72,15 +72,15 @@ jobs:
     container:
       image: ubuntu:20.04
 
+    permissions:
+        contents: write
+
     steps:
       - name: Install git inside container
         run: |
           apt-get update
           apt-get install -y git
 
-    permissions:
-        contents: write
-    steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
