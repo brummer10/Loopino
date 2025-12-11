@@ -178,9 +178,9 @@ runs:
       if: ${{ inputs.target == 'linux-x86_64' || inputs.target == 'linux' }}
       shell: bash
       run: |
-        sudo apt-get update -qq
-        sudo apt-get install -yqq libasound2-dev libjack-jackd2-dev libdbus-1-dev libgl1-mesa-dev libglib2.0-dev liblo-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev gperf
-        sudo apt-get clean
+        apt-get update -qq
+        apt-get install -yqq libasound2-dev libjack-jackd2-dev libdbus-1-dev libgl1-mesa-dev libglib2.0-dev liblo-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev gperf
+        apt-get clean
     - name: Setup dependencies (macOS)
       if: ${{ startsWith(inputs.target, 'macos') }}
       shell: bash
