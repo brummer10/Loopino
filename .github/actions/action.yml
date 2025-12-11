@@ -181,7 +181,6 @@ runs:
         apt-get update -qq
         apt-get install -f -y || true
         apt-get install -yqq libasound2-dev libjack-jackd2-dev libdbus-1-dev libgl1-mesa-dev libglib2.0-dev liblo-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev gperf
-        apt-get --fix-broken install -y
         apt-get install -f -y
         apt-get clean
     - name: Setup dependencies (macOS)

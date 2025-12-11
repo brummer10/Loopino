@@ -12,18 +12,23 @@ jobs:
         target: [linux-x86_64]
     runs-on: ubuntu-22.04
 
-    container:
-      image: ubuntu:20.04
-
     permissions:
         contents: write
 
-    steps:
-      - name: Install git inside container
-        run: |
-          apt-get update
-          apt-get install -y git libc-bin
+    container:
+      image: ubuntu:20.04
+      options: --user root
 
+    steps:
+      - name: Prepare system
+        run: |
+          apt-get update -qq
+          apt-get install -yqq \
+            git ca-certificates build-essential \
+            pkg-config curl wget unzip \
+            software-properties-common
+
+      - name: Checkout
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -40,18 +45,23 @@ jobs:
         target: [linux-x86_64]
     runs-on: ubuntu-22.04
 
-    container:
-      image: ubuntu:20.04
-
     permissions:
         contents: write
 
-    steps:
-      - name: Install git inside container
-        run: |
-          apt-get update
-          apt-get install -y git libc-bin
+    container:
+      image: ubuntu:20.04
+      options: --user root
 
+    steps:
+      - name: Prepare system
+        run: |
+          apt-get update -qq
+          apt-get install -yqq \
+            git ca-certificates build-essential \
+            pkg-config curl wget unzip \
+            software-properties-common
+
+      - name: Checkout
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -69,18 +79,23 @@ jobs:
         target: [linux-x86_64]
     runs-on: ubuntu-22.04
 
-    container:
-      image: ubuntu:20.04
-
     permissions:
         contents: write
 
-    steps:
-      - name: Install git inside container
-        run: |
-          apt-get update
-          apt-get install -y git libc-bin
+    container:
+      image: ubuntu:20.04
+      options: --user root
 
+    steps:
+      - name: Prepare system
+        run: |
+          apt-get update -qq
+          apt-get install -yqq \
+            git ca-certificates build-essential \
+            pkg-config curl wget unzip \
+            software-properties-common
+
+      - name: Checkout
       - uses: actions/checkout@v4
         with:
           submodules: recursive
