@@ -154,6 +154,30 @@ runs:
         # make extra args
         echo "MAKE_EXTRA_ARGS=DEBUG=${{ inputs.debug }} HAVE_CAIRO=${{ inputs.pawpaw }} WITH_LTO=${{ inputs.lto }} ${{ inputs.extraargs }}" >> $GITHUB_ENV
 
+    - name: Pre‑apt repair & force noninteractive mode
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        echo "DEBIAN_FRONTEND=${DEBIAN_FRONTEND}" >> $GITHUB_ENV
+        echo "=== APT sources ==="
+        ls -la /etc/apt/sources.list.d || true
+        echo "=== APT lists (small preview) ==="
+        ls -la /var/lib/apt/lists || true
+        echo "=== dpkg status summary ==="
+        dpkg --get-selections | grep -v deinstall | head -n 80 || true
+        sudo apt-get update -qq || true
+        sudo DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" \
+            -o Dpkg::Options::="--force-confold" --fix-broken install || true
+        sudo dpkg --configure -a || true
+        sudo apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install -f || true
+        sudo apt-get clean || true
+        echo "=== After repair: dpkg status summary ==="
+        dpkg --get-selections | grep -v deinstall | head -n 80 || true
+        echo "=== free/disk ==="
+        df -h || true
+        free -m || true
+
     # setup build cache
     - name: Setup build cache
       if: ${{ inputs.pawpaw == 'true' }}
