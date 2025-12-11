@@ -10,10 +10,18 @@ jobs:
     strategy:
       matrix:
         target: [linux-x86_64]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     permissions:
         contents: write
     steps:
+      - name: Prepare container (install basic deps)
+        run: |
+          set -e
+          apt-get update -qq
+          apt-get install -y --no-install-recommends sudo git ca-certificates apt-transport-https wget curl build-essential lsb-release
+          rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -23,15 +31,24 @@ jobs:
           postfix: -app
           lto: false
           pawpaw: true
+          skip_system_fix: 'true'
 
   linux-clap:
     strategy:
       matrix:
         target: [linux-x86_64]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     permissions:
         contents: write
     steps:
+      - name: Prepare container (install basic deps)
+        run: |
+          set -e
+          apt-get update -qq
+          apt-get install -y --no-install-recommends sudo git ca-certificates apt-transport-https wget curl build-essential lsb-release
+          rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -42,15 +59,24 @@ jobs:
           extraargs: clap
           lto: false
           pawpaw: true
+          skip_system_fix: 'true'
 
   linux-vst2:
     strategy:
       matrix:
         target: [linux-x86_64]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     permissions:
         contents: write
     steps:
+      - name: Prepare container (install basic deps)
+        run: |
+          set -e
+          apt-get update -qq
+          apt-get install -y --no-install-recommends sudo git ca-certificates apt-transport-https wget curl build-essential lsb-release
+          rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -61,6 +87,7 @@ jobs:
           extraargs: vst2
           lto: false
           pawpaw: true
+          skip_system_fix: 'true'
 
   windows-clap:
     strategy:
@@ -99,14 +126,21 @@ jobs:
           pawpaw: true
 
   source:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
     permissions:
         contents: write
     steps:
+      - name: Prepare container (install basic deps)
+        run: |
+          set -e
+          apt-get update -qq
+          apt-get install -y --no-install-recommends sudo git ca-certificates apt-transport-https wget curl build-essential lsb-release
+          rm -rf /var/lib/apt/lists/*
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
         with:
           target: source
-

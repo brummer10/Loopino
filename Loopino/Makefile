@@ -92,7 +92,7 @@ ifeq ($(TARGET), Linux)
 	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f`\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections -Wl,--gc-sections \
 	-pthread $(SSE_CFLAGS)
-	CXXFLAGS += -MMD -std=c++20 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
+	CXXFLAGS += -MMD -std=c++17 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
 	LDFLAGS += -I. -lm -pthread -lpthread `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f`
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
@@ -104,7 +104,7 @@ ifeq ($(TARGET), Linux)
 	-L. $(LIB_DIR)libxputty.a  `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11` -lm
 else ifeq ($(TARGET), Windows)
 
-	CXXFLAGS += -MMD -std=c++20 -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
+	CXXFLAGS += -MMD -std=c++17 -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
 	LDFLAGS += -I. -lm -pthread -lpthread  $(PAWPAW_LFLAGS) `$(PKGCONFIG) --cflags --libs $(USEAPI) sndfile fftw3f`
 
