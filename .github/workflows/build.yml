@@ -22,7 +22,7 @@ jobs:
       - name: Install git inside container
         run: |
           apt-get update
-          apt-get install -y git
+          apt-get install -y git libc-bin
 
       - uses: actions/checkout@v4
         with:
@@ -50,7 +50,7 @@ jobs:
       - name: Install git inside container
         run: |
           apt-get update
-          apt-get install -y git
+          apt-get install -y git libc-bin
 
       - uses: actions/checkout@v4
         with:
@@ -79,7 +79,7 @@ jobs:
       - name: Install git inside container
         run: |
           apt-get update
-          apt-get install -y git
+          apt-get install -y git libc-bin
 
       - uses: actions/checkout@v4
         with:
