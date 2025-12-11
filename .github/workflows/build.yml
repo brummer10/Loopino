@@ -11,31 +11,10 @@ jobs:
       matrix:
         target: [linux-x86_64]
     runs-on: ubuntu-22.04
-
     permissions:
         contents: write
-
-    container:
-      image: ubuntu:20.04
-      options: --user root
-
     steps:
-      - name: Prepare system
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          echo "deb http://archive.ubuntu.com/ubuntu focal main restricted universe multiverse" > /etc/apt/sources.list
-          echo "deb http://archive.ubuntu.com/ubuntu focal-updates main restricted universe multiverse" >> /etc/apt/sources.list
-          echo "deb http://archive.ubuntu.com/ubuntu focal-security main restricted universe multiverse" >> /etc/apt/sources.list
-          apt-get update -qq
-          apt-get install -yqq \
-            tzdata \
-            git ca-certificates build-essential \
-            pkg-config curl wget unzip \
-            software-properties-common
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
@@ -50,31 +29,10 @@ jobs:
       matrix:
         target: [linux-x86_64]
     runs-on: ubuntu-22.04
-
     permissions:
         contents: write
-
-    container:
-      image: ubuntu:20.04
-      options: --user root
-
     steps:
-      - name: Prepare system
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          echo "deb http://archive.ubuntu.com/ubuntu focal main restricted universe multiverse" > /etc/apt/sources.list
-          echo "deb http://archive.ubuntu.com/ubuntu focal-updates main restricted universe multiverse" >> /etc/apt/sources.list
-          echo "deb http://archive.ubuntu.com/ubuntu focal-security main restricted universe multiverse" >> /etc/apt/sources.list
-          apt-get update -qq
-          apt-get install -yqq \
-            tzdata \
-            git ca-certificates build-essential \
-            pkg-config curl wget unzip \
-            software-properties-common
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
@@ -90,32 +48,10 @@ jobs:
       matrix:
         target: [linux-x86_64]
     runs-on: ubuntu-22.04
-
     permissions:
         contents: write
-
-    container:
-      image: ubuntu:20.04
-      options: --user root
-
     steps:
-      - name: Prepare system
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          echo "deb http://archive.ubuntu.com/ubuntu focal main restricted universe multiverse" > /etc/apt/sources.list
-          echo "deb http://archive.ubuntu.com/ubuntu focal-updates main restricted universe multiverse" >> /etc/apt/sources.list
-          echo "deb http://archive.ubuntu.com/ubuntu focal-security main restricted universe multiverse" >> /etc/apt/sources.list
-          apt-get update -qq
-          apt-get update -qq
-          apt-get install -yqq \
-            tzdata \
-            git ca-certificates build-essential \
-            pkg-config curl wget unzip \
-            software-properties-common
-
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: ./.github/actions
