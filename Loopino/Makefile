@@ -23,6 +23,7 @@ endif
 ifneq ($(MAKECMDGOALS),clap)
   ifneq ($(MAKECMDGOALS),vst2)
     USEAPI = jack
+    LDFLAGS += -lasound
   endif
 endif
 
@@ -90,17 +91,18 @@ endif
 ifeq ($(TARGET), Linux)
 	# set compile flags
 	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f`\
-	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections -Wl,--gc-sections \
+	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
 	CXXFLAGS += -MMD -std=c++17 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
-	LDFLAGS += -I. -lm -pthread -lpthread `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f`
+	LDFLAGS += -I. -lm -pthread -lpthread -lstdc++ `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f`
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
 	endif
-	ifeq ($(PAWPAW_BUILD),1)
-		LDFLAGS += -static-libgcc -static-libstdc++
+	ifneq (,$(findstring clang, $(CXX)))
+		CXXFLAGS := $(filter-out -fstrength-reduce,$(CXXFLAGS))
+		CXXFLAGS += -Wno-unused-private-field
 	endif
-	GUI_LDFLAGS += -I. -I$(HEADER_DIR) \
+	GUI_LDFLAGS += -I. -I$(HEADER_DIR) -Wl,--gc-sections \
 	-L. $(LIB_DIR)libxputty.a  `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo x11` -lm
 else ifeq ($(TARGET), Windows)
 
@@ -125,7 +127,7 @@ endif
 
 	DEPS = loopino.d $(RESAMP_DIR)resampler.d  $(RESAMP_DIR)resampler_table.d
 
-.PHONY : mod all clean install uninstall
+.PHONY : mod all clean install uninstall info
 
 all : check $(NAME)
 	$(QUIET)mkdir -p ../bin
@@ -154,6 +156,11 @@ ifdef ARMCPU
 	@$(R_ECHO)"ARM CPU DEDECTED, please check the optimization flags$(reset)"
 endif
 
+info:
+	$(info $(yellow) INFO: $(reset) cxxflags $(blue) $(CXX) $(CXXFLAGS) $(reset))
+	$(info $(yellow) INFO: $(reset) ldflags  $(blue) $(LDFLAGS) $(GUI_LDFLAGS))
+	@$(B_ECHO) "=================== INFO =======================$(reset)"
+
 
 clean :
 	$(QUIET)rm -f *.o *.d *.a *.lib 
@@ -169,8 +176,8 @@ ifneq ("$(wildcard ../bin/$(NAME)$(EXE))","")
 	$(QUIET)cp ./$(BUILD_DIR)/$(NAME) $(DESTDIR)$(EXE_INSTALL_DIR)/$(NAME)
   ifeq ($(user),root)
 	$(QUIET)mkdir -p $(DESTDIR)$(DESKAPPS_DIR)
-	$(QUIET)cp $(NAME).desktop $(DESTDIR)$(DESKAPPS_DIR)
-	$(QUIET)cp $(NAME).svg $(DESTDIR)$(PIXMAPS_DIR)
+	$(QUIET)cp $(NAME).desktop $(DESTDIR)$(DESKAPPS_DIR)/$(NAME).desktop
+	$(QUIET)cp $(NAME).svg $(DESTDIR)$(PIXMAPS_DIR)/$(NAME).svg
 	$(QUIET)update-desktop-database || true
   endif
 else
@@ -209,24 +216,22 @@ $(RESAMP_LIB): $(RESAMP_OBJ)
 	$(QUIET)$(AR) rcs $(RESAMP_LIB) $(RESAMP_OBJ)
 	@$(B_ECHO) "=================== DONE =======================$(reset)"
 
-$(NAME).clap:  $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
+$(NAME).clap: $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB) | info
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
 	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) -o $(NAME).clap $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
 endif
 
-$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h  $(RESAMP_LIB)
+$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h  $(RESAMP_LIB) | info
 	@$(B_ECHO) "Compiling $(NAME)vst.$(LIB_EXT) $(reset)"
 	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -L. $(RESAMP_LIB) -o $(NAME)vst.$(LIB_EXT) $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME)vst.$(LIB_EXT)
 endif
 
-$(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h
+$(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h | info
 	@$(B_ECHO) "Build $@ $(reset)"
-	$(info $(yellow) INFO: $(reset) cxxflags $(blue) $(CXX) $(CXXFLAGS) $(reset))
-	$(info $(yellow) INFO: $(reset) ldflags  $(blue) $(LDFLAGS) $(GUI_LDFLAGS))
 	$(QUIET)$(CXX) -MMD $(CXXFLAGS) $(OBJECTS) -L. $(RESAMP_LIB) -o $(NAME)$(EXE) $(LDFLAGS) $(GUI_LDFLAGS)
 ifneq ($(MAKECMDGOALS),debug)
 	$(QUIET)$(STRIP) -s -x -X -R .note.ABI-tag $(NAME)$(EXE)

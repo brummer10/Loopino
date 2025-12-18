@@ -69,6 +69,10 @@ void process_midi(void* midi_input_port_buf) {
                 ui.synth.setResoLP((int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 74) {
                 ui.synth.setCutoffLP((int)in_event.buffer[2]);
+            } else if (in_event.buffer[1] == 7) {    // CC7 Volume
+                constexpr float min_dB = -20.0f;
+                constexpr float max_dB =  12.0f;
+                ui.volume = min_dB + ((float)in_event.buffer[2] / 127.0f) * (max_dB - min_dB);
             } else {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }
@@ -106,7 +110,6 @@ int jack_process(jack_nframes_t nframes, void *arg) {
     float *output1 = static_cast<float *>(jack_port_get_buffer (out1_port, nframes));
 
     static float fRec0[2] = {0};
-    static float fRec1[2] = {0};
     static constexpr float THRESHOLD = 0.25f; // -12db
     static uint32_t r = 0;
     static bool rec = false;
@@ -162,24 +165,28 @@ int jack_process(jack_nframes_t nframes, void *arg) {
         memset(output, 0.0, (uint32_t)nframes * sizeof(float));
         memset(output1, 0.0, (uint32_t)nframes * sizeof(float));
     }
-    float fSlow0 = 0.0010000000000000009 * ui.gain;
     for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
-        fRec1[0] = fSlow0 + 0.999 * fRec1[1];
-        float out = ui.synth.process() * fRec1[0];
+        float out = ui.synth.process();
         output[i] += out;
         output1[i] += out;
-        fRec1[1] = fRec1[0];
     }
 
     return 0;
 }
 
-void startJack() {
+bool startJack() {
+    char buffer[1024];
+    auto fp = fmemopen(buffer, 1024, "w");
+    if ( !fp ) { std::printf("error"); }
+    auto old = stderr;
+    stderr = fp;
 
     if ((client = jack_client_open ("loopino", JackNoStartServer, NULL)) == 0) {
-        fprintf (stderr, "jack server not running?\n");
-        ui.onExit();
+        std::cout << "jack server not running trying ALSA " << std::endl;
+        return false;
     }
+    std::fclose(fp);
+    stderr = old;
 
     if (client) {
         midi_port = jack_port_register(
@@ -199,7 +206,7 @@ void startJack() {
 
         if (jack_activate (client)) {
             fprintf (stderr, "cannot activate client");
-            ui.onExit();
+            return false;
         }
 
         if (!jack_is_realtime(client)) {
@@ -209,6 +216,7 @@ void startJack() {
         }
         runProcess = true;
     }
+    return true;
 }
 
 void quitJack() {

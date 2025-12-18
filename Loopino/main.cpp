@@ -23,9 +23,13 @@
 Loopino ui;
 
 #include "jack.cc"
+#include "AlsaAudioOut.h"
+#include "AlsaMidiIn.h"
 
-#if defined(__linux__) || defined(__FreeBSD__) || \
-    defined(__NetBSD__) || defined(__OpenBSD__)
+AlsaRawMidiIn rawmidi;
+std::vector<AlsaMidiDevice> devices;
+std::string mididevice; // = "hw:2,0,0";
+
 // catch signals and exit clean
 void
 signal_handler (int sig)
@@ -36,46 +40,91 @@ signal_handler (int sig)
         case SIGTERM:
         case SIGQUIT:
             std::cerr << "\nsignal "<< sig <<" received, exiting ...\n"  <<std::endl;
-            XLockDisplay(ui.w->app->dpy);
+            XLockDisplay(ui.w_top->app->dpy);
             ui.onExit();
-            XFlush(ui.w->app->dpy);
-            XUnlockDisplay(ui.w->app->dpy);
+            XFlush(ui.w_top->app->dpy);
+            XUnlockDisplay(ui.w_top->app->dpy);
         break;
         default:
         break;
     }
 }
-#endif
+
+static void device_select(void *w_, void* user_data) {
+    if(user_data !=NULL) {
+        int response = *(int*)user_data;
+        if (rawmidi.open(devices[response-1].id.data(), &ui)) rawmidi.start();
+    }
+}
+
+void showMidiDeviceSelect() {
+    if (!devices.size()) {
+        Widget_t *dia = open_message_dialog(ui.w_top, INFO_BOX,
+        "Select MIDI Device:",  "NO MIDI Devices found, MIDI support skipped", " ");
+        XSetTransientForHint(ui.w_top->app->dpy, dia->widget, ui.w_top->widget);
+        return;
+    }
+    if (devices.size() == 1) {
+        if (rawmidi.open(devices[0].id.data(), &ui)) rawmidi.start();
+        return;
+    }
+
+    std::string d;
+    d +=  devices[0].label;
+    for (size_t i = 1; i < devices.size(); ++i) {
+        d += " | " + devices[i].label;
+    }
+
+    Widget_t *dia = open_message_dialog(ui.w_top, SELECTION_BOX,
+        "Select MIDI Device:",  "Devices:", d.data());
+    XSetTransientForHint(ui.w_top->app->dpy, dia->widget, ui.w_top->widget);
+    ui.w_top->func.dialog_callback = device_select;
+}
 
 int main(int argc, char *argv[]){
 
-    #if defined(__linux__) || defined(__FreeBSD__) || \
-        defined(__NetBSD__) || defined(__OpenBSD__)
     if(0 == XInitThreads()) 
         std::cerr << "Warning: XInitThreads() failed\n" << std::endl;
-    #endif
+
+    if (argc > 1) {
+        mididevice = argv[1];
+    }
 
     Xputty app;
+    AlsaAudioOut out;
     std::condition_variable Sync;
 
     main_init(&app);
     ui.createGUI(&app);
 
-    #if defined(__linux__) || defined(__FreeBSD__) || \
-        defined(__NetBSD__) || defined(__OpenBSD__)
     signal (SIGQUIT, signal_handler);
     signal (SIGTERM, signal_handler);
     signal (SIGHUP, signal_handler);
     signal (SIGINT, signal_handler);
-    #endif
 
-    startJack();
+    if (!startJack()) {
+        if (out.init(&ui)) out.start();
+        if (!mididevice.empty()) {
+            if (rawmidi.open(mididevice.data(), &ui)) {
+                rawmidi.start();
+            } else {
+                Widget_t *dia = open_message_dialog(ui.w_top, INFO_BOX,
+                    "MIDI Device:",  "MIDI Devices not found, MIDI support skipped", " ");
+                    XSetTransientForHint(ui.w_top->app->dpy, dia->widget, ui.w_top->widget);
+            }
+        } else {
+            devices = rawmidi.listAlsaRawMidiInputs();
+            showMidiDeviceSelect();
+        }
+    }
 
     main_run(&app);
 
     ui.pa.stop();
 
     quitJack();
+    rawmidi.stop();
+    out.stop();
 
     main_quit(&app);
 

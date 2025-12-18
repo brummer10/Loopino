@@ -14,6 +14,10 @@
 #include <algorithm>
 #include <random>
 
+#include "Oberheim.h"
+#include "Limiter.h"
+#include "Chorus.h"
+#include "Reverb.h"
 
 #ifndef SAMPLEPLAYER_H
 #define SAMPLEPLAYER_H
@@ -162,10 +166,14 @@ public:
     double pmPhase = 0.0;
     double pmFreq = 0.0;
     double pmDepthNorm = 0.0;
-    float vibRate = 5.0f;      // Hz
-    float vibDepth = 0.0f;     // 0..1 (depth)
-    float tremRate = 5.0f;     // Hz
+
+    float   vibRate = 5.0f;      // Hz
+    float  vibDepth = 0.0f;     // 0..1 (depth)
+    bool   vibonoff = false;
+
+    float  tremRate = 5.0f;     // Hz
     float tremDepth = 0.0f;    // 0..1 (depth)
+    bool  tremonoff = false;
 
 
     SamplePlayer(double outputRate = 44100.0)
@@ -318,7 +326,7 @@ public:
         float gainMod = 1.0f;
 
         // Vibrato (Pitch LFO)
-        if (vibDepth > 0.0001f && vibRate > 0.1f) {
+        if (vibonoff) {
             vibPhase = advancePhase(vibPhase, vibRate, srOut);
             float lfo = pmSoftSine(vibPhase);
             float vib = lfo * vibDepth * 0.01f;
@@ -326,7 +334,7 @@ public:
         }
 
         // Tremolo (Amplitude LFO)
-        if (tremDepth > 0.0001f && tremRate > 0.1f) {
+        if (tremonoff) {
             tremPhase = advancePhase(tremPhase, tremRate, srOut);
             float lfo = pmSoftSine(tremPhase);
             float lfoUni = 0.5f * (lfo + 1.0f);
@@ -424,11 +432,117 @@ private:
     bool looping;
 };
 
+
 /****************************************************************
-        4-Pole Ladder Filter (Moog style)
+        Zero Delay Feedback Ladder Filter (Moog style)
 ****************************************************************/
 
 enum class LadderVoicing { Warm, Classic, Bright };
+
+struct ZDFLadderFilter {
+    double z1=0, z2=0, z3=0, z4=0;
+    double cutoff = 1000.0;
+    double resonance = 0.0;
+    double sampleRate = 44100.0;
+    double feedback = 1.0;
+    double voicing = 1.16;
+    int ccCutoff = 127;
+    int ccReso = 0;
+    float keyTracking = 0.5f;
+    bool filterOff = false;
+    bool highpass = false;
+    double g = 0.0;
+    double lastY4 = 0.0;
+    float fadeGain = 0.0f;
+    float fadeStep = 0.0f;
+    bool  targetOn = false; 
+
+    inline void update() {
+        // avoid > Nyquist and keep argument small for tan()
+        double fc = cutoff * voicing;
+        double nyq = 0.5 * sampleRate;
+        if (fc > nyq * 0.99) fc = nyq * 0.99;
+        if (fc < 1.0) fc = 1.0;
+        double x = (M_PI * fc) / sampleRate;
+        g = std::tan(x);
+        if (!std::isfinite(g) || g <= 0.0) g = 1e-12;
+    }
+
+    void setSampleRate(double sr) {
+        sampleRate = sr;
+        fadeStep = 1.0f / (0.02f * sampleRate);
+        update();
+    }
+
+    void setCutoff(double f) {
+        cutoff = f;
+        update();
+    }
+
+    void reset() {
+        z1=z2=z3=z4=0.0;
+        lastY4 = 0.0;
+    }
+
+    void setVoicing(LadderVoicing v) {
+        switch(v) {
+            case LadderVoicing::Warm:      voicing = 1.12; break;
+            case LadderVoicing::Classic:   voicing = 1.16; break;
+            case LadderVoicing::Bright:    voicing = 1.30; break;
+            default:                       voicing = 1.16; break;
+        }
+        update();
+    }
+
+    inline float tanh_fast(float x) {
+        float x2 = x * x;
+        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
+    }
+
+    inline double tpt(double x, double &s) {
+        double y = (x - s) * (g / (1.0 + g)) + s;
+        s = y + (y - s);
+        return y;
+    }
+
+    inline double process(double in) {
+        if (targetOn) {
+            fadeGain = std::min(1.0f, fadeGain + fadeStep);
+        } else {
+            fadeGain = std::max(0.0f, fadeGain - fadeStep);
+            if (fadeGain == 0.0f) {
+                filterOff = false;
+                return in;
+            }
+        }
+
+        double gComp = 1.0 / (1.0 + 0.5 * g);
+        double fb = feedback * gComp;
+        double u = in - fb * lastY4;
+
+        u = tanh_fast(u);
+
+        double y1 = tpt(u,  z1);
+        double y2 = tpt(y1, z2);
+        double y3 = tpt(y2, z3);
+        double y4 = tpt(y3, z4);
+
+        lastY4 = y4;
+
+        // resonance/loudness comp
+        double resGainComp = 1.0 + (resonance * resonance) * 2.0;
+        double lp = y4 * resGainComp;
+        double hp = (in - 4.0 * y1) * 0.33 * resGainComp * 0.5; // (input - (y1 * 2.0 + y2)) * 0.33;  input - lp; //
+
+        if (!highpass) return in * (1.0f - fadeGain) + lp * fadeGain;
+        return in * (1.0f - fadeGain) + hp * fadeGain;
+    }
+
+};
+
+/****************************************************************
+        4-Pole Ladder Filter (Moog style)
+****************************************************************/
 
 struct LadderFilter {
     double z1=0, z2=0, z3=0, z4=0; // 4 integrator stages
@@ -437,14 +551,20 @@ struct LadderFilter {
     double sampleRate = 44100.0;
     double feedback = 1.0;
     double tunning = 0.5;
-    double voicing = 1.16;
+    double voicing = 1.16; // classic
     int ccCutoff = 127;
     int ccReso = 0;
     float keyTracking = 0.5f;
-    bool filterOff = true;
+    bool filterOff = false;
     bool highpass = false;
+    float fadeGain = 0.0f;
+    float fadeStep = 0.0f;
+    bool  targetOn = false; 
 
-    void setSampleRate(double sr) {sampleRate = sr;}
+    void setSampleRate(double sr) {
+        sampleRate = sr;
+        fadeStep = 1.0f / (0.01f * sampleRate);
+    }
 
     void reset() { z1=z2=z3=z4=0.0; }
 
@@ -463,7 +583,17 @@ struct LadderFilter {
     }
 
     inline double process(double in) {
-        if (filterOff) return in;
+        if (targetOn) {
+            fadeGain = std::min(1.0f, fadeGain + fadeStep);
+        } else {
+            fadeGain = std::max(0.0f, fadeGain - fadeStep);
+            if (fadeGain == 0.0f) {
+                filterOff = false;
+                return in;
+            }
+        }
+        // save input for fading
+        double input = in;
         // Feedback from 4th stage
         in -= z4 * feedback;
         in = tanh_fast(in); // std::tanh
@@ -478,9 +608,10 @@ struct LadderFilter {
         double resGainComp = 1.0 + (resonance * resonance) * 2.0;
 
         double lp = z4 * resGainComp;
+        double hp = in - lp;
 
-        if (!highpass) return lp;
-        return in - lp;
+        if (!highpass) return input * (1.0f - fadeGain) + lp * fadeGain;
+        return input * (1.0f - fadeGain) + hp * fadeGain;
     }
 };
 
@@ -501,9 +632,12 @@ public:
     void setSampleRate(double sr) {
         env.setSampleRate(sr);
         filterLP.setSampleRate(sr);
+        filterLP.highpass = false;
         filterHP.setSampleRate(sr);
         filterHP.highpass = true;
         filterHP.ccCutoff = 0;
+        lfo.setFreq(0.4f, sr);
+        obf.setSampleRate(sr);
         player.setSampleRate(sr);
     }
 
@@ -516,10 +650,22 @@ public:
     void setPmMode(int m) {player.setPmMode(m);}
     void setvibDepth(float v) {player.vibDepth = v;}
     void setvibRate(float r) {player.vibRate = r;}
+    void setOnOffVib(bool r) {player.vibonoff = r;}
     void settremDepth(float t) {player.tremDepth = t;}
     void settremRate(float r) {player.tremRate = r;}
-
+    void setOnOffTrem(bool r) {player.tremonoff = r;}
     void setRootFreq(float freq_) {freq = freq_;}
+
+    void setCutOffObf(float c) {obf.setCutOff(c);}
+    void setResonanceObf(float r) {obf.setResonance(r);}
+    void setKeyTrackingObf(float k) {obf.setKeyTracking(k);}
+    void setModeObf(float m) {obf.setMode(m);}
+    void setOnOffObf(bool on) {
+        obf.setOnOff(on);
+        obf.recalcFilter(midiNote);
+        obf.reset();
+    }
+
     void setPitchWheel(float f) {
         float semitones = f * 2.0f;
         float factor = pow(2.0, semitones / 12.0);
@@ -530,34 +676,72 @@ public:
     void setCutoffLP(int value) {
         value = std::clamp(value, 0, 127);
         filterLP.ccCutoff = value;
-        if (filterLP.ccCutoff == 127 && filterLP.ccReso == 0) filterLP.filterOff = true;
-        else filterLP.filterOff = false;
     }
 
     void setResoLP(int value) {
         value = std::clamp(value, 0, 127);
         filterLP.ccReso   = value;
-        if (filterLP.ccCutoff == 127 && filterLP.ccReso == 0) filterLP.filterOff = true;
-        else filterLP.filterOff = false;
+    }
+
+    void setOnOffLP(bool value) {
+        filterLP.targetOn = value;
+        if (value && !filterLP.filterOff) {
+            recalcFilter(filterLP);
+            filterLP.reset();
+            filterLP.filterOff = true;
+        }
     }
 
     void setCutoffHP(int value) {
         value = std::clamp(value, 0, 127);
         filterHP.ccCutoff = value;
-        if (filterHP.ccCutoff == 0 && filterHP.ccReso == 0) filterHP.filterOff = true;
-        else filterHP.filterOff = false;
     }
 
     void setResoHP(int value) {
         value = std::clamp(value, 0, 127);
         filterHP.ccReso   = value;
-        if (filterHP.ccCutoff == 0 && filterHP.ccReso == 0) filterHP.filterOff = true;
-        else filterHP.filterOff = false;
     }
 
-    void setKeyTracking(float amt) {
+    void setOnOffHP(bool value) {
+        filterHP.targetOn = value;
+        if (value && !filterHP.filterOff) {
+            recalcFilter(filterLP);
+            filterHP.reset();
+            filterHP.filterOff = true;
+        }
+    }
+
+    void setLpKeyTracking(float amt) {
         filterLP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
+    }
+
+    void setHpKeyTracking(float amt) {
         filterHP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
+    }
+
+    inline float velocityCurve(float vel) {
+        return powf(vel, velmode) * velComp;
+    }
+
+    void setVelMode(int m) {
+        switch(m) {
+            case 0:
+                velmode = 0.55f;
+                velComp = 0.9f;
+                break;
+            case 1:
+                velmode = 0.75f;
+                velComp = 1.0f;
+                break;
+            case 2:
+                velmode = 1.25f;
+                velComp = 1.25f;
+                break;
+            default:
+                velmode = 0.75f;
+                velComp = 1.0f;
+                break;
+        }
     }
 
     void noteOn(int midiNote, float velocity,
@@ -567,16 +751,25 @@ public:
         this->midiNote = midiNote;
         this->rootFreq = rootFreq;
         active = true;
-        vel = velocity;
+        vel = velocityCurve(velocity);
         player.setSample(sampleData, sourceRate);
         player.setFrequency(midiToFreq(midiNote), rootFreq);
         player.setLoop(0, sampleData->data.size() - 1, looping);
         player.reset();
+        obf.recalcFilter(midiNote);
+        obf.reset();
         recalcFilter(filterLP);
         filterLP.reset();
         recalcFilter(filterHP);
         filterHP.reset();
         env.noteOn();
+    }
+
+    void noteOff(int midiNote, float velocity) {
+        if (active && midiNote == this->midiNote) {
+            vel = velocityCurve(velocity);
+            env.noteOff();
+        }
     }
 
     void noteOff(int midiNote) {
@@ -597,7 +790,9 @@ public:
         float amp = env.process();
         float out = player.process() * vel * amp;
         if (!env.isActive()) active = false;
-        return filterLP.process(filterHP.process(out));
+        //float lfo_ = lfo.process();
+        out = obf.process(out);
+        return filterHP.process(filterLP.process(out));
     }
 
     void getAnalyseBuffer(float *abuf, int frames,
@@ -623,7 +818,7 @@ public:
         player.reset();
         player.processSave(duration, abuf);
         for (uint32_t i = 0; i < abuf.size(); i++) {
-            abuf[i] = filterLP.process(filterHP.process(abuf[i]));
+            abuf[i] = filterHP.process(filterLP.process(abuf[i]));
         }
     }
 
@@ -633,18 +828,18 @@ private:
     SamplePlayer player;
     ADSR env;
     LadderFilter filterLP;
-    LadderFilter filterHP;
+    ZDFLadderFilter filterHP;
+    LFO lfo;
+    SEMFilter obf;
 
     bool active = false;
-    bool looping = true;
     float vel = 1.0f;
+    float velmode = 0.7f;
+    float velComp = 1.0f;
     float freq = 440.0f;
     float pitch = 0.0f;
     int midiNote = -1;
     double rootFreq = 440.0;
-
-    double pmFreq = 0.0;
-    double pmDepth = 0.0;
 
     const float minFreq = 20.0;
     const float maxFreq = 20000.0;
@@ -666,24 +861,33 @@ private:
     }
 
     void recalcFilter(LadderFilter& filter) {
-        if (filter.filterOff) return;
-        // Base cutoff from CC74
-        float baseCut = ccToFreq(filter.ccCutoff);
+        if (!filter.filterOff) return;
 
-        // Key tracking
+        float baseCut = ccToFreq(filter.ccCutoff);
         float semi = midiNote - 60;
         float keyFactor = std::pow(2.0f, (semi / 12.0f) * filter.keyTracking);
         double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
-
         filter.cutoff = finalCut;
-
-        // Resonance from CC71 (scaled to 0..1 for ladder)
+        //std::cout << finalCut << std::endl;
         double Q = ccToQ(filter.ccReso);
-        filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95); // safe mapping
-
-        // Normalized cutoff + simple tuning correction
+        filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95);
         filter.tunning = 2.0 * (filter.cutoff / filter.sampleRate) * filter.voicing;
-        filter.feedback = filter.resonance * 4.0 * (1.0 - 0.15 * filter.tunning * filter.tunning); // resonance feedback
+        filter.feedback = filter.resonance * 4.0 * (1.0 - 0.15 * filter.tunning * filter.tunning);
+    }
+
+    void recalcFilter(ZDFLadderFilter& filter) {
+        if (!filter.filterOff) return;
+
+        float baseCut = ccToFreq(filter.ccCutoff);
+        float semi = midiNote - 60;
+        float keyFactor = std::pow(2.0f, (semi / 12.0f) * filter.keyTracking);
+        double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
+        filter.cutoff = finalCut;
+        double Q = ccToQ(filter.ccReso);
+        filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95);
+        filter.update();
+        double gComp = 1.0 / (1.0 + 0.5 * filter.g);
+        filter.feedback = filter.resonance * 3.5 * gComp;
     }
 
 };
@@ -705,6 +909,9 @@ public:
         sampleRate = sr;
         masterGain = (1.0f / std::sqrt((float)maxVoices));
         playLoop = false;
+        chorus.setSampleRate(sr);
+        reverb.setSampleRate(sr);
+        lim.setSampleRate(sr);
         for (auto& v : voices) {
             v->setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
             v->setSampleRate(sr);
@@ -764,34 +971,41 @@ public:
         }
     }
 
-    void setCutoffLP(int value) {
+    void setCutoffLP(float value) {
         for (auto& v : voices) {
-            v->setCutoffLP(value);
+            v->setCutoffLP((int)value);
         }
     }
 
-    void setResoLP(int value) {
+    void setResoLP(float value) {
         for (auto& v : voices) {
-            v->setResoLP(value);
+            v->setResoLP((int)value);
         }
     }
 
-    void setCutoffHP(int value) {
+    void setCutoffHP(float value) {
         for (auto& v : voices) {
-            v->setCutoffHP(value);
+            v->setCutoffHP((int)value);
         }
     }
 
-    void setResoHP(int value) {
+    void setResoHP(float value) {
         for (auto& v : voices) {
-            v->setResoHP(value);
+            v->setResoHP((int)value);
         }
     }
 
-    void setKeyTracking(float amt) {
+    void setLpKeyTracking(float amt) {
         float value = std::clamp(amt, 0.0f, 1.0f);
         for (auto& v : voices) {
-            v->setKeyTracking(value);
+            v->setLpKeyTracking(value);
+        }
+    }
+
+    void setHpKeyTracking(float amt) {
+        float value = std::clamp(amt, 0.0f, 1.0f);
+        for (auto& v : voices) {
+            v->setHpKeyTracking(value);
         }
     }
 
@@ -825,6 +1039,13 @@ public:
         }
     }
 
+    void setOnOffVib(float r) {
+        bool on = r ? true : false;
+        for (auto& v : voices) {
+            v->setOnOffVib(on);
+        }
+    }
+
     void settremDepth(float t) {
         for (auto& v : voices) {
             v->settremDepth(t);
@@ -836,6 +1057,87 @@ public:
             v->settremRate(r);
         }
     }
+
+    void setOnOffTrem(int r) {
+        bool on = r ? true : false;
+        for (auto& v : voices) {
+            v->setOnOffTrem(on);
+        }
+    }
+
+    void setVelMode(int m) {
+        for (auto& v : voices) {
+            v->setVelMode(m);
+        }
+    }
+
+    void setCutOffObf(float c) {
+        for (auto& v : voices) {
+            v->setCutOffObf(c);
+        }
+    }
+
+    void setResonanceObf(float r) {
+        for (auto& v : voices) {
+            v->setResonanceObf(r);
+        }
+    }
+
+    void setKeyTrackingObf(float k) {
+        for (auto& v : voices) {
+            v->setKeyTrackingObf(k);
+        }
+    }
+
+    void setOnOffObf(int o) {
+        bool on = o ? true : false;
+        for (auto& v : voices) {
+            v->setOnOffObf(on);
+        }
+    }
+
+    void setOnOffLP(int o) {
+        bool on = o ? true : false;
+        for (auto& v : voices) {
+            v->setOnOffLP(on);
+        }
+    }
+
+    void setOnOffHP(int o) {
+        bool on = o ? true : false;
+        for (auto& v : voices) {
+            v->setOnOffHP(on);
+        }
+    }
+
+    void setModeObf(float m) {
+        for (auto& v : voices) {
+            v->setModeObf(m);
+        }
+    }
+
+    void setGain(float g) { gain = g;}
+
+    void setChorusFreq(float v)  { chorus.setChorusFreq(v); }
+    void setChorusLevel(float v) { chorus.setChorusLevel(v); }
+    void setChorusDelay(float v) { chorus.setChorusDelay(v); }
+    void setChorusDepth(float v) { chorus.setChorusDepth(v); }
+    void setChorusOnOff(int v) {
+        bool on = v ? true : false;
+        chorus.setOnOff(on);
+    }
+
+    void setReverbRoomSize(float v) {
+        float value = 0.9f + v * (1.05f - 0.9f);
+        reverb.setRoomSize(value);
+    }
+    void setReverbDamp(float v) { reverb.setDamp(v); }
+    void setReverbMix(float v) { reverb.setMix(v); }
+    void setReverbOnOff(int v) {
+        bool on = v ? true : false;
+        reverb.setOnOff(on);
+    }
+
 
     void noteOn(int midiNote, float velocity, size_t sampleIndex = 0) {
         if (playLoop ? !loopBank : !sampleBank) return;
@@ -854,6 +1156,10 @@ public:
         voices[0]->noteOn(midiNote, velocity, s, s->sourceRate, s->rootFreq, playLoop);
     }
 
+    void noteOff(int midiNote, float velocity) {
+        for (auto& v : voices) v->noteOff(midiNote, velocity);
+    }
+
     void noteOff(int midiNote) {
         for (auto& v : voices) v->noteOff(midiNote);
     }
@@ -864,22 +1170,31 @@ public:
 
     float process() {
         float mix = 0.0f;
+        float fSlow0 = 0.0010000000000000009 * gain;
         for (auto& v : voices) {
             if (v->isActive()) {
                 mix += v->process();
             }
         }
-        // avoid clipping
-        mix *= masterGain;
-        return mix;
+        fRec0[0] = fSlow0 + 0.999 * fRec0[1];
+        mix *= masterGain * fRec0[0];
+        mix = chorus.process(mix);
+        mix = reverb.process(mix);
+        fRec0[1] = fRec0[0];
+        return lim.process(mix);
     }
 
 private:
+    Limiter lim;
+    Chorus chorus;
+    Reverb reverb;
     std::vector<std::unique_ptr<SampleVoice>> voices;
     const SampleBank* sampleBank = nullptr;
     const SampleBank* loopBank = nullptr;
     double sampleRate;
     float masterGain;
+    float gain = std::pow(1e+01, 0.05 * 0.0);
+    float fRec0[2] = {0.0f};
     bool playLoop;
 };
 

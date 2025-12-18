@@ -49,7 +49,7 @@ static void wheel_draw(void *w_, void *user_data) {
     float wheel_h = height * 0.70f;
     float wheel_y = (height - wheel_h) * 0.5f;
 
-    float angle = wheel->value * 1.3f;
+    float angle = wheel->value * -1.3f;
     float disp = sin(angle) * wheel_h * 0.45f;
 
     float slot_h = wheel_h * 1.25f;
@@ -139,6 +139,16 @@ static void wheel_button_press(void *w_, void* button_, void *user_data) {
 static void wheel_button_release(void *w_, void* button_, void *user_data) {
     Widget_t *w = (Widget_t*)w_;
     Wheel *wheel = (Wheel*)w->private_struct;
+    XButtonEvent *xbutton = (XButtonEvent*)button_;
+    if(xbutton->button == Button4) {
+        wheel->value = min(WHEEL_MAX, wheel->value + 0.1f);
+        w->func.value_changed_callback(w, user_data);
+        expose_widget(w);
+    } else if(xbutton->button == Button5) {
+        wheel->value = max(WHEEL_MIN,wheel->value - 0.1f);
+        w->func.value_changed_callback(w, user_data);
+        expose_widget(w);
+    }
     wheel->is_dragging = 0;
     wheel->spring_active = 1;
     wheel->spring_velocity = 0.0f;
@@ -151,7 +161,7 @@ static void wheel_motion(void *w_, void* xmotion_, void *user_data) {
     if (!wheel->is_dragging) return;
 
     int dy = xmotion->y - wheel->drag_start_y;
-    float v = wheel->drag_start_value + dy * wheel->sensitivity;
+    float v = wheel->drag_start_value - dy * wheel->sensitivity;
     if (v < WHEEL_MIN) v = WHEEL_MIN;
     if (v > WHEEL_MAX) v = WHEEL_MAX;
 

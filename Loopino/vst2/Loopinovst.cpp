@@ -49,7 +49,7 @@ struct VstStreamIn : StreamIn {
 #define PLUGIN_UID 'LOPI'
 
 #define WINDOW_WIDTH  880
-#define WINDOW_HEIGHT 390
+#define WINDOW_HEIGHT 490
 
 #define FlagsChunks (1 << 5)
 
@@ -165,14 +165,11 @@ static void processReplacing(AEffect* effect, float** inputs, float** outputs, i
         memset(left_output, 0.0, nframes * sizeof(float));
         memset(right_output, 0.0, nframes * sizeof(float));
     }
-    float fSlow0 = 0.0010000000000000009 * plug->r->gain;
     for (int32_t i = 0; i < nframes; i++) {
         // process synth
-        fRec0[0] = fSlow0 + 0.999 * fRec0[1];
-        float out = plug->r->synth.process() * fRec0[0];
+        float out = plug->r->synth.process();
         left_output[i] += out;
         right_output[i] += out;
-        fRec0[1] = fRec0[0];
     }
 }
 

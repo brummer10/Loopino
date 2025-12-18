@@ -53,6 +53,20 @@ struct StreamIn {
 };
 #endif
 
+#define MAX_FLOAT_BINDINGS  40
+#define MAX_INT_BINDINGS    25
+
+using ExposeFunc = void (*)(void* w_, void* user_data);
+
+class Loopino;
+
+template<typename T>
+struct ValueBinding {
+    T Loopino::*member;
+    int dirtyIndex;
+    void (*extra)(Loopino*, T);
+};
+
 /****************************************************************
     class Loopino - create the GUI for loopino
 ****************************************************************/
@@ -62,22 +76,13 @@ class Loopino : public TextEntry
 public:
     Xputty app;
     Widget_t *w_top;
-    Widget_t *w;
-    Widget_t *lw;
     Widget_t *PitchWheel;
     Widget_t *keyboard;
     ParallelThread pa;
     ParallelThread fetch;
     AudioFile af;
-    PitchTracker pt;
-    LoopGenerator lg;
     PolySynth synth;
     Params param;
-    
-    std::vector<float> loopBuffer;
-    std::vector<float> loopBufferSave;
-    std::vector<float> sampleBuffer;
-    std::vector<float> sampleBufferSave;
 
     SampleBank sbank;
     std::shared_ptr<SampleInfo> sampleData { nullptr };;
@@ -106,9 +111,7 @@ public:
     float freq;
     float loopFreq;
     float gain;
-
-    std::string filename;
-    std::string lname;
+    float volume;
 
     bool loadNew;
     bool loadLoopNew;
@@ -137,6 +140,7 @@ public:
         ready = true;
         havePresetToLoad = false;
         record = false;
+        inDrag = false;
         matches = 0;
         currentLoop = 0;
         loopPeriods = 1;
@@ -148,6 +152,8 @@ public:
         loopPitchCorrection = 0;
         loopRootkey = 69;
         loadPresetMIDI = -1;
+        lastPresetMIDI = -1;
+        currentPresetNum = -1;
         p = 0;
         firstLoop = true;
         attack = 0.01f;
@@ -155,10 +161,12 @@ public:
         release = 0.8f;
         sustain = 0.3f;
         frequency = 440.0f;
-        resonance = 0.0;
-        cutoff = 127.0;
-        hpresonance = 0.0;
-        hpcutoff = 127.0;
+        resonance = 0.0f;
+        cutoff = 127.0f;
+        lpkeytracking = 0.0f;
+        hpresonance = 0.0f;
+        hpcutoff = 127.0f;
+        hpkeytracking = 0.0f;
         volume = 0.0f;
         sharp = 0.0f;
         saw = 0.0f;
@@ -167,10 +175,29 @@ public:
         pmdepth = 0.0f;
         vibdepth = 0.0f;
         vibrate = 5.0f;
+        vibonoff = 0;
         tremdepth = 0.0f;
         tremrate = 5.0f;
+        tremonoff = 0;
         pitchwheel = 0.5f;
+        obfresonance = 0.2f;
+        obfcutoff = 1000.0f;
+        obfkeytracking = 0.3f;
+        chorusfreq = 3.0f;
+        choruslev = 0.5f;
+        chorusdepth = 0.02f;
+        chorusdelay = 0.02f;
+        chorusonoff = 0;
+        obfmode = 0.0f;
+        revroomsize = 0.0f;
+        revdamp = 0.25f;
+        revmix = 50.0f;
+        revonoff = 0;
+        lponoff = 0;
+        hponoff = 0;
+        obfonoff = 0;
         pmmode = 0;
+        velmode = 1;
         useLoop = 0;
         timer = 30;
         generateKeys();
@@ -183,6 +210,7 @@ public:
     ~Loopino() {
         pa.stop();
     };
+
 
 /****************************************************************
                       public function calls
@@ -226,7 +254,7 @@ public:
     }
 
     void loadPresetNum(int v) {
-        if (v < 0 || v > (int)presetFiles.size()) return;
+       // if (v < 0 || v > (int)presetFiles.size()-1) return;
         loadPresetMIDI = v;
     }
 
@@ -267,7 +295,8 @@ public:
     void createGUI(Xputty *app) {
         #ifndef RUN_AS_PLUGIN
         set_custom_theme(app);
-        w_top = create_window(app, os_get_root_window(app, IS_WINDOW), 0, 0, 880, 390);
+        // top level window
+        w_top = create_window(app, os_get_root_window(app, IS_WINDOW), 0, 0, 880, 490);
         widget_set_title(w_top, "loopino");
         widget_set_icon_from_png(w_top,LDVAR(loopino_png));
         #endif
@@ -279,9 +308,10 @@ public:
         w_top->func.dnd_notify_callback = dnd_load_response;
         w_top->func.resize_notify_callback = resize_callback;
         commonWidgetSettings(w_top);
-        os_set_window_min_size(w_top, 798, 290, 880, 390);
+        os_set_window_min_size(w_top, 880, 390, 880, 490);
 
-        w = create_widget(app, w_top, 0, 0, 440, 310);
+        // sample view
+        w = create_widget(app, w_top, 0, 0, 440, 140);
         w->parent = w_top;
         w->scale.gravity = NORTCENTER;
         w->func.expose_callback = draw_window;
@@ -319,7 +349,7 @@ public:
         wview->func.button_release_callback = set_playhead;
         commonWidgetSettings(wview);
 
-        lw = create_widget(app, w_top, 440, 0, 440, 310);
+        lw = create_widget(app, w_top, 440, 0, 440, 140);
         lw->parent = w_top;
         lw->scale.gravity = NORTCENTER;
         lw->func.expose_callback = draw_window;
@@ -333,29 +363,35 @@ public:
         loopview->func.button_release_callback = set_playhead;
         commonWidgetSettings(loopview);
 
-        Widget_t* frame = add_frame(w, "Sample Buffer", 10, 145, 305, 75);
-        frame->scale.gravity = SOUTHWEST;
+        Controls = create_widget(app, w_top, 0, 140, 880, 300);
+        Controls->parent = w_top;
+        Controls->scale.gravity = WESTEAST;
+        Controls->func.expose_callback = draw_window;
+        commonWidgetSettings(Controls);
+
+        Widget_t* frame = add_frame(Controls, "Sample Buffer", 10, 10, 245, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        filebutton = add_file_button(frame, 20, 20, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
-        filebutton->scale.gravity = SOUTHEAST;
+        filebutton = add_file_button(frame, 10, 20, 35, 35, getenv("HOME") ? getenv("HOME") : PATH_SEPARATOR, "audio");
+        filebutton->scale.gravity = ASPECT;
         widget_get_png(filebutton, LDVAR(load__png));
         filebutton->flags |= HAS_TOOLTIP;
         add_tooltip(filebutton, "Load audio file");
         filebutton->func.user_callback = dialog_response;
         commonWidgetSettings(filebutton);
 
-        Presets = add_button(frame, "", 60, 20, 35, 35);
-        Presets->scale.gravity = SOUTHWEST;
+        Presets = add_button(frame, "", 50, 20, 35, 35);
+        Presets->scale.gravity = ASPECT;
         widget_get_png(Presets, LDVAR(presets_png));
         Presets->flags |= HAS_TOOLTIP;
         add_tooltip(Presets, "Load/Save Presets");
         Presets->func.value_changed_callback = presets_callback;
         commonWidgetSettings(Presets);
 
-        FadeOut = add_knob(frame, "FadeOut",135,18,38,38);
-        FadeOut->scale.gravity = SOUTHWEST;
+        FadeOut = add_knob(frame, "FadeOut",90,18,38,38);
+        FadeOut->scale.gravity = ASPECT;
         FadeOut->flags |= HAS_TOOLTIP;
         add_tooltip(FadeOut, "Fade Out Samplebuffer");
         set_adjustment(FadeOut->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
@@ -364,16 +400,16 @@ public:
         FadeOut->func.value_changed_callback = fade_callback;
         commonWidgetSettings(FadeOut);
 
-        clip = add_button(frame, "", 175, 20, 35, 35);
-        clip->scale.gravity = SOUTHWEST;
+        clip = add_button(frame, "", 130, 20, 35, 35);
+        clip->scale.gravity = ASPECT;
         widget_get_png(clip, LDVAR(clip__png));
         clip->flags |= HAS_TOOLTIP;
         add_tooltip(clip, "Clip Sample to clip marks");
         clip->func.value_changed_callback = button_clip_callback;
         commonWidgetSettings(clip);
 
-        playbutton = add_image_toggle_button(frame, "", 215, 20, 35, 35);
-        playbutton->scale.gravity = SOUTHWEST;
+        playbutton = add_image_toggle_button(frame, "", 165, 20, 35, 35);
+        playbutton->scale.gravity = ASPECT;
         widget_get_png(playbutton, LDVAR(play_png));
         playbutton->flags |= HAS_TOOLTIP;
         add_tooltip(playbutton, "Play Sample");
@@ -381,8 +417,8 @@ public:
         commonWidgetSettings(playbutton);
 
         #ifndef RUN_AS_PLUGIN
-        Record = add_image_toggle_button(frame, "", 255, 20, 35, 35);
-        Record->scale.gravity = SOUTHWEST;
+        Record = add_image_toggle_button(frame, "", 200, 20, 35, 35);
+        Record->scale.gravity = ASPECT;
         widget_get_png(Record, LDVAR(record_png));
         Record->flags |= HAS_TOOLTIP;
         add_tooltip(Record, "Record Sample");
@@ -390,13 +426,51 @@ public:
         commonWidgetSettings(Record);
         #endif
 
-        frame = add_frame(lw, "Loop Buffer", 2, 145, 180, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "Freq", 260, 10, 90, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Frequency = add_valuedisplay(frame, _(" Hz"), 10, 25, 70, 30);
+        set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
+        commonWidgetSettings(Frequency);
+        connectValueChanged(Frequency, &Loopino::frequency, 4, "Synth Root Frequency", nullptr,
+            [](Loopino* self, float v) {self->synth.setRootFreq(v);});
+
+        frame = add_frame(Controls, "Dynamic", 355, 10, 83, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        VelMode[0] = add_check_box(frame,"Soft" , 12, 20, 15, 15);
+        VelMode[0]->flags |= IS_RADIO;
+        set_widget_color(VelMode[0], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        add_tooltip(VelMode[0], "Velocity Dynamic Curve Soft");
+        commonWidgetSettings(VelMode[0]);
+        VelMode[0]->func.value_changed_callback = radio_box_velocity_pressed;
+
+        VelMode[1] = add_check_box(frame,"Piano" , 12, 37, 15, 15);
+        VelMode[1]->flags |= IS_RADIO;
+        set_widget_color(VelMode[1], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        add_tooltip(VelMode[1], "Velocity Dynamic Curve Piano");
+        commonWidgetSettings(VelMode[1]);
+        VelMode[1]->func.value_changed_callback = radio_box_velocity_pressed;
+
+        VelMode[2] = add_check_box(frame,"Punch" , 12, 54, 15, 15);
+        VelMode[2]->flags |= IS_RADIO;
+        add_tooltip(VelMode[2], "Velocity Dynamic Curve Punch");
+        commonWidgetSettings(VelMode[2]);
+        set_widget_color(VelMode[2], (Color_state)0, (Color_mod)3, 0.55, 0.65, 0.55, 1.0);
+        VelMode[2]->func.value_changed_callback = radio_box_velocity_pressed;
+        velocity_box_set_active(VelMode[velmode]);
+
+        frame = add_frame(Controls, "Loop Buffer", 443, 10, 180, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
         setLoop = add_image_toggle_button(frame, "", 15, 20, 35, 35);
-        setLoop->scale.gravity = SOUTHWEST;
+        setLoop->scale.gravity = ASPECT;
         widget_get_png(setLoop, LDVAR(loop_png));
         setLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setLoop, "Use Loop Sample");
@@ -404,16 +478,18 @@ public:
         commonWidgetSettings(setLoop);
 
         setLoopSize = add_knob(frame, "S",53,18,38,38);
-        setLoopSize->scale.gravity = SOUTHWEST;
+        setLoopSize->scale.gravity = ASPECT;
         setLoopSize->flags |= HAS_TOOLTIP;
         add_tooltip(setLoopSize, "Loop Periods");
-        set_adjustment(setLoopSize->adj, 1.0, 1.0, 1.0, 12.0, 1.0, CL_CONTINUOS);
+        set_adjustment(setLoopSize->adj, 1.0, 1.0, 1.0, 512.0, 1.0, CL_CONTINUOS);
         setLoopSize->func.expose_callback = draw_knob;
+        setLoopSize->func.button_press_callback = setLoopSize_indrag;
+        setLoopSize->func.button_release_callback = setLoopSize_released;
         setLoopSize->func.value_changed_callback = setLoopSize_callback;
         commonWidgetSettings(setLoopSize);
 
         setPrevLoop = add_button(frame, "", 95, 20, 35, 35);
-        setPrevLoop->scale.gravity = SOUTHWEST;
+        setPrevLoop->scale.gravity = ASPECT;
         widget_get_png(setPrevLoop, LDVAR(prev_png));
         setPrevLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setPrevLoop, "Load previous loop");
@@ -421,20 +497,20 @@ public:
         commonWidgetSettings(setPrevLoop);
 
         setNextLoop = add_button(frame, "", 130, 20, 35, 35);
-        setNextLoop->scale.gravity = SOUTHWEST;
+        setNextLoop->scale.gravity = ASPECT;
         widget_get_png(setNextLoop, LDVAR(next_png));
         setNextLoop->flags |= HAS_TOOLTIP;
         add_tooltip(setNextLoop, "Load next loop");
         setNextLoop->func.value_changed_callback = setNextLoop_callback;
         commonWidgetSettings(setNextLoop);
 
-        frame = add_frame(lw, "Sharp", 187, 145, 105, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "Sharp", 628, 10, 105, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
         Sharp = add_knob(frame, "Square",15,20,38,38);
-        Sharp->scale.gravity = SOUTHWEST;
+        Sharp->scale.gravity = ASPECT;
         Sharp->flags |= HAS_TOOLTIP;
         add_tooltip(Sharp, "Square");
         set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
@@ -444,7 +520,7 @@ public:
         commonWidgetSettings(Sharp);
 
         Saw = add_knob(frame, "Saw",55,20,38,38);
-        Saw->scale.gravity = SOUTHWEST;
+        Saw->scale.gravity = ASPECT;
         Saw->flags |= HAS_TOOLTIP;
         add_tooltip(Saw, "Saw Tooth");
         set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
@@ -453,146 +529,71 @@ public:
         Saw->func.value_changed_callback = saw_callback;
         commonWidgetSettings(Saw);
 
-        frame = add_frame(lw, "Gain", 297, 145, 65, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "Gain", 738, 10, 65, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
         Volume = add_knob(frame, "dB",14,20,38,38);
-        Volume->scale.gravity = SOUTHWEST;
+        Volume->scale.gravity = ASPECT;
         Volume->flags |= HAS_TOOLTIP;
         add_tooltip(Volume, "Volume (dB)");
-        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 12.0, 0.1, CL_CONTINUOS);
+        set_adjustment(Volume->adj, 0.0, 0.0, -20.0, 12.0, 0.01, CL_CONTINUOS);
         set_widget_color(Volume, (Color_state)1, (Color_mod)2, 0.38, 0.62, 0.94, 1.0);
         Volume->func.expose_callback = draw_knob;
         Volume->func.value_changed_callback = volume_callback;
         commonWidgetSettings(Volume);
 
         #ifndef RUN_AS_PLUGIN
-        frame = add_frame(lw, "Exit", 367, 145, 62, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "Exit", 808, 10, 62, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
         w_quit = add_button(frame, "", 15, 20, 35, 35);
         widget_get_png(w_quit, LDVAR(exit__png));
-        w_quit->scale.gravity = SOUTHWEST;
+        w_quit->scale.gravity = ASPECT;
         w_quit->flags |= HAS_TOOLTIP;
         add_tooltip(w_quit, "Exit");
         w_quit->func.value_changed_callback = button_quit_callback;
         commonWidgetSettings(w_quit);
         #endif
 
-        frame = add_frame(w, "ADSR", 10, 230, 190, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "ADSR", 10, 95, 180, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        Attack = add_knob(frame, "Attack",15,20,38,38);
-        Attack->scale.gravity = SOUTHWEST;
-        Attack->flags |= HAS_TOOLTIP;
-        add_tooltip(Attack, "Attack");
+        Attack = add_knob(frame, "Attack",10,20,38,38);
         set_adjustment(Attack->adj, 0.01, 0.01, 0.001, 5.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(Attack, (Color_state)1, (Color_mod)2, 0.894, 0.106, 0.623, 1.0);
-        Attack->func.expose_callback = draw_knob;
-        Attack->func.value_changed_callback = attack_callback;
         commonWidgetSettings(Attack);
+        connectValueChanged(Attack, &Loopino::attack, 0, "Attack", draw_knob,
+            [](Loopino* self, float v) {self->synth.setAttack(v);});
 
-        Decay = add_knob(frame, "Decay",55,20,38,38);
-        Decay->scale.gravity = SOUTHWEST;
-        Decay->flags |= HAS_TOOLTIP;
-        add_tooltip(Decay, "Decay");
+        Decay = add_knob(frame, "Decay",50,20,38,38);
         set_adjustment(Decay->adj, 0.1, 0.1, 0.005, 5.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(Decay, (Color_state)1, (Color_mod)2, 0.902, 0.098, 0.117, 1.0);
-        Decay->func.expose_callback = draw_knob;
-        Decay->func.value_changed_callback = decay_callback;
         commonWidgetSettings(Decay);
+        connectValueChanged(Decay, &Loopino::decay, 1, "Decay", draw_knob,
+            [](Loopino* self, float v) {self->synth.setDecay(v);});
 
-        Sustain = add_knob(frame, "Sustain",95,20,38,38);
-        Sustain->scale.gravity = SOUTHWEST;
-        Sustain->flags |= HAS_TOOLTIP;
-        add_tooltip(Sustain, "Sustain");
+        Sustain = add_knob(frame, "Sustain",90,20,38,38);
         set_adjustment(Sustain->adj, 0.8, 0.8, 0.001, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Sustain, (Color_state)1, (Color_mod)2, 0.377, 0.898, 0.109, 1.0);
-        Sustain->func.expose_callback = draw_knob;
-        Sustain->func.value_changed_callback = sustain_callback;
         commonWidgetSettings(Sustain);
+        connectValueChanged(Sustain, &Loopino::sustain, 2, "Sustain", draw_knob,
+            [](Loopino* self, float v) {self->synth.setSustain(v);});
 
-        Release = add_knob(frame, "Release",135,20,38,38);
-        Release->scale.gravity = SOUTHWEST;
-        Release->flags |= HAS_TOOLTIP;
-        add_tooltip(Release, "Release");
+        Release = add_knob(frame, "Release",130,20,38,38);
         set_adjustment(Release->adj, 0.3, 0.3, 0.005, 10.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(Release, (Color_state)1, (Color_mod)2, 0.486, 0.106, 0.894, 1.0);
-        Release->func.expose_callback = draw_knob;
-        Release->func.value_changed_callback = release_callback;
         commonWidgetSettings(Release);
+        connectValueChanged(Release, &Loopino::release, 3, "Release", draw_knob,
+            [](Loopino* self, float v) {self->synth.setRelease(v);});
 
-        frame = add_frame(w, "LP Filter", 205, 230, 110, 75);
-        frame->scale.gravity = SOUTHWEST;
-        frame->func.expose_callback = draw_frame;
-        commonWidgetSettings(frame);
-
-        Resonance = add_knob(frame, "Resonance",15,20,38,38);
-        Resonance->scale.gravity = SOUTHWEST;
-        Resonance->flags |= HAS_TOOLTIP;
-        add_tooltip(Resonance, "Resonance");
-        set_adjustment(Resonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
-        set_widget_color(Resonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
-        Resonance->func.expose_callback = draw_knob;
-        Resonance->func.value_changed_callback = resonance_callback;
-        commonWidgetSettings(Resonance);
-
-        CutOff = add_knob(frame, "CutOff",55,20,38,38);
-        CutOff->scale.gravity = SOUTHWEST;
-        CutOff->flags |= HAS_TOOLTIP;
-        add_tooltip(CutOff, "CutOff");
-        set_adjustment(CutOff->adj, 127.0, 127.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
-        set_widget_color(CutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
-        CutOff->func.expose_callback = draw_knob;
-        CutOff->func.value_changed_callback = cutoff_callback;
-        commonWidgetSettings(CutOff);
-
-        frame = add_frame(w, "HP Filter", 320, 230, 110, 75);
-        frame->scale.gravity = SOUTHWEST;
-        frame->func.expose_callback = draw_frame;
-        commonWidgetSettings(frame);
-
-        HpResonance = add_knob(frame, "HpResonance",15,20,38,38);
-        HpResonance->scale.gravity = SOUTHWEST;
-        HpResonance->flags |= HAS_TOOLTIP;
-        add_tooltip(HpResonance, "Resonance");
-        set_adjustment(HpResonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
-        set_widget_color(HpResonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
-        HpResonance->func.expose_callback = draw_knob;
-        HpResonance->func.value_changed_callback = hpresonance_callback;
-        commonWidgetSettings(HpResonance);
-
-        HpCutOff = add_knob(frame, "HpCutOff",55,20,38,38);
-        HpCutOff->scale.gravity = SOUTHWEST;
-        HpCutOff->flags |= HAS_TOOLTIP;
-        add_tooltip(HpCutOff, "CutOff");
-        set_adjustment(HpCutOff->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
-        set_widget_color(HpCutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
-        HpCutOff->func.expose_callback = draw_knob;
-        HpCutOff->func.value_changed_callback = hpcutoff_callback;
-        commonWidgetSettings(HpCutOff);
-
-        frame = add_frame(w, "Synth Freq", 320, 145, 115, 75);
-        frame->scale.gravity = SOUTHWEST;
-        frame->func.expose_callback = draw_frame;
-        commonWidgetSettings(frame);
-
-        Frequency = add_valuedisplay(frame, _(" Hz"), 22, 25, 70, 30);
-        set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
-        Frequency->scale.gravity = SOUTHWEST;
-        Frequency->flags |= HAS_TOOLTIP;
-        add_tooltip(Frequency, "Synth Root Frequency");
-        Frequency->func.value_changed_callback = frequency_callback;
-        commonWidgetSettings(Frequency);
-
-        frame = add_frame(lw, "Phase Modulator", 2, 230, 180, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "Phase Modulator", 195, 95, 180, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
@@ -623,86 +624,249 @@ public:
         radio_box_set_active(PmMode[pmmode]);
 
         PmDepth = add_knob(frame, "Depth",88,20,38,38);
-        PmDepth->scale.gravity = SOUTHWEST;
-        PmDepth->flags |= HAS_TOOLTIP;
-        add_tooltip(PmDepth, "PM Depth");
         set_adjustment(PmDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(PmDepth, (Color_state)1, (Color_mod)2, 0.55, 0.95, 0.80, 1.0);
-        PmDepth->func.expose_callback = draw_knob;
-        PmDepth->func.value_changed_callback = pmdepth_callback;
         commonWidgetSettings(PmDepth);
+        connectValueChanged(PmDepth, &Loopino::pmdepth, 14, "PM Depth", draw_knob,
+            [](Loopino* self, float v) {self->synth.setPmDepth(v);});
 
         PmFreq = add_knob(frame, "Freq",128,20,38,38);
-        PmFreq->scale.gravity = SOUTHWEST;
-        PmFreq->flags |= HAS_TOOLTIP;
-        add_tooltip(PmFreq, "PM Freq");
         set_adjustment(PmFreq->adj, 0.01, 0.01, 0.01, 30.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(PmFreq, (Color_state)1, (Color_mod)2, 0.60, 0.80, 1.00, 1.0);
-        PmFreq->func.expose_callback = draw_knob;
-        PmFreq->func.value_changed_callback = pmfreq_callback;
         commonWidgetSettings(PmFreq);
+        connectValueChanged(PmFreq, &Loopino::pmfreq, 13, "PM Freq", draw_knob,
+            [](Loopino* self, float v) {self->synth.setPmFreq(v);});
 
-        frame = add_frame(lw, "Vibrato", 187, 230, 105, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "LP Ladder Filter", 380, 95, 148, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        VibDepth = add_knob(frame, "VibDepth",15,20,38,38);
-        VibDepth->scale.gravity = SOUTHWEST;
-        VibDepth->flags |= HAS_TOOLTIP;
-        add_tooltip(VibDepth, "Vibrato Depth");
+        LpOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(LpOnOff);
+        connectValueChanged(LpOnOff, &Loopino::lponoff, 28, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setOnOffLP(v);});
+
+        Resonance = add_knob(frame, "Resonance",40,20,38,38);
+        set_adjustment(Resonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(Resonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
+        commonWidgetSettings(Resonance);
+        connectValueChanged(Resonance, &Loopino::resonance, 8, "Resonance", draw_knob,
+            [](Loopino* self, float v) {self->synth.setResoLP(v);});
+
+        CutOff = add_knob(frame, "CutOff",80,20,38,38);
+        set_adjustment(CutOff->adj, 127.0, 127.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(CutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
+        commonWidgetSettings(CutOff);
+        connectValueChanged(CutOff, &Loopino::cutoff, 9, "CutOff", draw_knob,
+            [](Loopino* self, float v) {self->synth.setCutoffLP(v);});
+
+        LpKeyTracking = add_wheel(frame, "", 125, 10, 12, 55);
+        LpKeyTracking->parent_struct = (void*)this;
+        LpKeyTracking->flags |= HAS_TOOLTIP;
+        add_tooltip(LpKeyTracking, "Key-tracking");
+        LpKeyTracking->func.value_changed_callback = lpkeytracking_callback;
+        commonWidgetSettings(LpKeyTracking);
+
+        frame = add_frame(Controls, "HP Ladder Filter", 533, 95, 148, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        HpOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(HpOnOff);
+        connectValueChanged(HpOnOff, &Loopino::hponoff, 29, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setOnOffHP(v);});
+
+        HpResonance = add_knob(frame, "HpResonance",40,20,38,38);
+        set_adjustment(HpResonance->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(HpResonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
+        commonWidgetSettings(HpResonance);
+        connectValueChanged(HpResonance, &Loopino::hpresonance, 15, "Resonance", draw_knob,
+            [](Loopino* self, float v) {self->synth.setResoHP(v);});
+
+        HpCutOff = add_knob(frame, "HpCutOff",80,20,38,38);
+        set_adjustment(HpCutOff->adj, 0.0, 0.0, 0.0, 127.0, 1.0, CL_CONTINUOS);
+        set_widget_color(HpCutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
+        commonWidgetSettings(HpCutOff);
+        connectValueChanged(HpCutOff, &Loopino::hpcutoff, 16, "CutOff", draw_knob,
+            [](Loopino* self, float v) {self->synth.setCutoffHP(v);});
+
+        HpKeyTracking = add_wheel(frame, "", 125, 10, 12, 55);
+        HpKeyTracking->parent_struct = (void*)this;
+        HpKeyTracking->scale.gravity = ASPECT;
+        HpKeyTracking->flags |= HAS_TOOLTIP;
+        add_tooltip(HpKeyTracking, "Key-tracking");
+        HpKeyTracking->func.value_changed_callback = hpkeytracking_callback;
+        commonWidgetSettings(HpKeyTracking);
+
+        frame = add_frame(Controls, "Oberheim Filter", 686, 95, 184, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        ObfOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(ObfOnOff);
+        connectValueChanged(ObfOnOff, &Loopino::obfonoff, 27, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setOnOffObf(v);});
+
+        ObfMode = add_knob(frame, "ObfMode",40,20,38,38);
+        set_adjustment(ObfMode->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(ObfMode, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.55, 1.0);
+        commonWidgetSettings(ObfMode);
+        connectValueChanged(ObfMode, &Loopino::obfmode, 23, "Mode LP <-> BP <-> HP", draw_knob,
+            [](Loopino* self, float v) {self->synth.setModeObf(v);});
+
+        ObfResonance = add_knob(frame, "ObfResonance",80,20,38,38);
+        set_adjustment(ObfResonance->adj, 0.0, 0.0, 0.0, 0.6, 0.01, CL_CONTINUOS);
+        set_widget_color(ObfResonance, (Color_state)1, (Color_mod)2, 0.95, 0.42, 0.15, 1.0);
+        commonWidgetSettings(ObfResonance);
+        connectValueChanged(ObfResonance, &Loopino::obfresonance, 25, "Resonance", draw_knob,
+            [](Loopino* self, float v) {self->synth.setResonanceObf(v);});
+
+        ObfCutOff = add_knob(frame, "ObfCutOff",120,20,38,38);
+        set_adjustment(ObfCutOff->adj, 1000.0, 1000.0, 40.0, 12000.0, 0.1, CL_LOGARITHMIC);
+        set_widget_color(ObfCutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
+        commonWidgetSettings(ObfCutOff);
+        connectValueChanged(ObfCutOff, &Loopino::obfcutoff, 26, "CutOff", draw_knob,
+            [](Loopino* self, float v) {self->synth.setCutOffObf(v);});
+
+        ObfKeyTracking = add_wheel(frame, "", 162, 10, 12, 55);
+        ObfKeyTracking->scale.gravity = ASPECT;
+        ObfKeyTracking->flags |= HAS_TOOLTIP;
+        Wheel *wheel = (Wheel*)ObfKeyTracking->private_struct;
+        wheel->value = -1.0;
+        add_tooltip(ObfKeyTracking, "Key-tracking");
+        commonWidgetSettings(ObfKeyTracking);
+        ObfKeyTracking->func.value_changed_callback = obfkeytracking_callback;
+
+        frame = add_frame(Controls, "Vibrato", 10, 180, 130, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        VibOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(VibOnOff);
+        connectValueChanged(VibOnOff, &Loopino::vibonoff, 30, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setOnOffVib(v);});
+
+        VibDepth = add_knob(frame, "VibDepth",40,20,38,38);
         set_adjustment(VibDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(VibDepth, (Color_state)1, (Color_mod)2, 0.00, 0.78, 1.00, 1.0);
-        VibDepth->func.expose_callback = draw_knob;
-        VibDepth->func.value_changed_callback = vibdepth_callback;
         commonWidgetSettings(VibDepth);
+        connectValueChanged(VibDepth, &Loopino::vibdepth, 15, "Vibrato Depth", draw_knob,
+            [](Loopino* self, float v) {self->synth.setvibDepth(v);});
 
-        VibRate = add_knob(frame, "VibRate",55,20,38,38);
-        VibRate->scale.gravity = SOUTHWEST;
-        VibRate->flags |= HAS_TOOLTIP;
-        add_tooltip(VibRate, "Vibrato Rate");
+        VibRate = add_knob(frame, "VibRate",80,20,38,38);
         set_adjustment(VibRate->adj, 5.0, 5.0, 0.1, 12.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(VibRate, (Color_state)1, (Color_mod)2, 0.00, 1.00, 0.78, 1.0);
-        VibRate->func.expose_callback = draw_knob;
-        VibRate->func.value_changed_callback = vibrate_callback;
         commonWidgetSettings(VibRate);
+        connectValueChanged(VibRate, &Loopino::vibrate, 16, "Vibrato Rate", draw_knob,
+            [](Loopino* self, float v) {self->synth.setvibRate(v);});
 
-        frame = add_frame(lw, "Tremolo", 297, 230, 105, 75);
-        frame->scale.gravity = SOUTHWEST;
+        frame = add_frame(Controls, "Tremolo", 145, 180, 130, 75);
+        frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
-        TremDepth = add_knob(frame, "TremDepth",15,20,38,38);
-        TremDepth->scale.gravity = SOUTHWEST;
-        TremDepth->flags |= HAS_TOOLTIP;
-        add_tooltip(TremDepth, "Tremolo Depth");
+        TremOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(TremOnOff);
+        connectValueChanged(TremOnOff, &Loopino::tremonoff, 31, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setOnOffTrem(v);});
+
+        TremDepth = add_knob(frame, "TremDepth",40,20,38,38);
         set_adjustment(TremDepth->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(TremDepth, (Color_state)1, (Color_mod)2, 1.00, 0.67, 0.47, 1.0);
-        TremDepth->func.expose_callback = draw_knob;
-        TremDepth->func.value_changed_callback = tremdepth_callback;
         commonWidgetSettings(TremDepth);
+        connectValueChanged(TremDepth, &Loopino::tremdepth, 17, "Tremolo Depth", draw_knob,
+            [](Loopino* self, float v) {self->synth.settremDepth(v);});
 
-        TremRate = add_knob(frame, "TremRate",55,20,38,38);
-        TremRate->scale.gravity = SOUTHWEST;
-        TremRate->flags |= HAS_TOOLTIP;
-        add_tooltip(TremRate, "Tremolo Rate");
+        TremRate = add_knob(frame, "TremRate",80,20,38,38);
         set_adjustment(TremRate->adj, 5.0, 5.0, 0.1, 15.0, 0.01, CL_LOGARITHMIC);
         set_widget_color(TremRate, (Color_state)1, (Color_mod)2, 1.00, 0.78, 0.59, 1.0);
-        TremRate->func.expose_callback = draw_knob;
-        TremRate->func.value_changed_callback = tremrate_callback;
         commonWidgetSettings(TremRate);
+        connectValueChanged(TremRate, &Loopino::tremrate, 18, "Tremolo Rate", draw_knob,
+            [](Loopino* self, float v) {self->synth.settremRate(v);});
 
-        PitchWheel = add_wheel(lw, "", 410, 230, 20, 75);
-        PitchWheel->parent_struct = (void*)this;
+        frame = add_frame(Controls, "Chorus", 280, 180, 205, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        ChorusOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(ChorusOnOff);
+        connectValueChanged(ChorusOnOff, &Loopino::chorusonoff, 32, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setChorusOnOff(v);});
+
+        ChorusLev = add_knob(frame, "ChorusLev",40,20,38,38);
+        set_adjustment(ChorusLev->adj, 0.5, 0.5, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(ChorusLev, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(ChorusLev);
+        connectValueChanged(ChorusLev, &Loopino::choruslev, 33, "Chorus Level", draw_knob,
+            [](Loopino* self, float v) {self->synth.setChorusLevel(v);});
+
+        ChorusDelay = add_knob(frame, "ChorusDelay",80,20,38,38);
+        set_adjustment(ChorusDelay->adj, 0.02, 0.02, 0.0, 0.2, 0.001, CL_CONTINUOS);
+        set_widget_color(ChorusDelay, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(ChorusDelay);
+        connectValueChanged(ChorusDelay, &Loopino::chorusdelay, 34, "Chorus Delay", draw_knob,
+            [](Loopino* self, float v) {self->synth.setChorusDelay(v);});
+
+        ChorusDepth = add_knob(frame, "ChorusDepth",120,20,38,38);
+        set_adjustment(ChorusDepth->adj, 0.02, 0.02, 0.0, 1.0, 0.001, CL_CONTINUOS);
+        set_widget_color(ChorusDepth, (Color_state)1, (Color_mod)2, 0.66, 0.33, 0.33, 1.0);
+        commonWidgetSettings(ChorusDepth);
+        connectValueChanged(ChorusDepth, &Loopino::chorusdepth, 35, "Chorus Depth", draw_knob,
+            [](Loopino* self, float v) {self->synth.setChorusDepth(v);});
+
+        ChorusFreq = add_knob(frame, "ChorusFreq",160,20,38,38);
+        set_adjustment(ChorusFreq->adj, 3.0, 3.0, 0.1, 10.0, 0.01, CL_LOGARITHMIC);
+        set_widget_color(ChorusFreq, (Color_state)1, (Color_mod)2, 0.1, 0.67, 0.47, 1.0);
+        commonWidgetSettings(ChorusFreq);
+        connectValueChanged(ChorusFreq, &Loopino::chorusfreq, 36, "Chorus Frequency", draw_knob,
+            [](Loopino* self, float v) {self->synth.setChorusFreq(v);});
+
+        frame = add_frame(Controls, "Reverb", 490, 180, 165, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        RevOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(RevOnOff);
+        connectValueChanged(RevOnOff, &Loopino::revonoff, 37, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setReverbOnOff(v);});
+
+        RevRoomSize = add_knob(frame, "RevRoomSize",40,20,38,38);
+        set_adjustment(RevRoomSize->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(RevRoomSize, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(RevRoomSize);
+        connectValueChanged(RevRoomSize, &Loopino::revroomsize, 38, "Room Size", draw_knob,
+            [](Loopino* self, float v) {self->synth.setReverbRoomSize(v);});
+
+        RevDamp = add_knob(frame, "RevDamp",80,20,38,38);
+        set_adjustment(RevDamp->adj, 0.25, 0.25, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(RevDamp, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(RevDamp);
+        connectValueChanged(RevDamp, &Loopino::revdamp, 39, "Damp", draw_knob,
+            [](Loopino* self, float v) {self->synth.setReverbDamp(v);});
+
+        RevMix = add_knob(frame, "RevMix",120,20,38,38);
+        set_adjustment(RevMix->adj, 50.0, 50.0, 0.0, 100.0, 1.0, CL_CONTINUOS);
+        set_widget_color(RevMix, (Color_state)1, (Color_mod)2, 0.66, 0.33, 0.33, 1.0);
+        commonWidgetSettings(RevMix);
+        connectValueChanged(RevMix, &Loopino::revmix, 40, "Mix", draw_knob,
+            [](Loopino* self, float v) {self->synth.setReverbMix(v);});
+
+
+        PitchWheel = add_wheel(Controls, "", 845, 180, 20, 75);
         PitchWheel->scale.gravity = SOUTHWEST;
         PitchWheel->flags |= HAS_TOOLTIP;
         add_tooltip(PitchWheel, "Pitch Bend");
-        PitchWheel->func.value_changed_callback = wheel_callback;
         commonWidgetSettings(PitchWheel);
+        PitchWheel->func.value_changed_callback = wheel_callback;
 
-        keyboard = add_midi_keyboard(w_top, "Organ", 0, 310, 880, 80);
+        keyboard = add_midi_keyboard(w_top, "Organ", 0, 410, 880, 80);
         keyboard->flags |= HIDE_ON_DELETE;
-        //keyboard->scale.gravity = SOUTHCENTER;
         keyboard->parent_struct = (void*)this;
         MidiKeyboard* keys = (MidiKeyboard*)keyboard->private_struct;
         Widget_t *view_port = keys->context_menu->childlist->childs[0];
@@ -725,50 +889,47 @@ public:
     }
 
 private:
+    Widget_t *w, *lw, *Controls;
     Widget_t *w_quit;
     Widget_t *filebutton;
-    Widget_t *wview;
-    Widget_t *loopview;
-    Widget_t *loopMark_L;
-    Widget_t *loopMark_R;
+    Widget_t *loopview, *wview;
+    Widget_t *loopMark_L, *loopMark_R, *setLoop, *setLoopSize,
+             *setNextLoop, *setPrevLoop;
     Widget_t *playbutton;
     Widget_t *Volume;
-    Widget_t *saveLoop;
     Widget_t *clip;
-    Widget_t *setLoop;
-    Widget_t *setLoopSize;
-    Widget_t *setNextLoop;
-    Widget_t *setPrevLoop;
     Widget_t *Presets;
     Widget_t *Record;
 
-    Widget_t *Attack;
-    Widget_t *Decay;
-    Widget_t *Sustain;
-    Widget_t *Release;
+    Widget_t *Attack, *Decay, *Sustain, *Release;
     Widget_t *Frequency;
-    Widget_t *Resonance;
-    Widget_t *CutOff;
-    Widget_t *HpResonance;
-    Widget_t *HpCutOff;
-    Widget_t *Sharp;
-    Widget_t *Saw;
-    Widget_t *FadeOut;
-    Widget_t *PmFreq;
-    Widget_t *PmDepth;
-    Widget_t *PmMode[4];
-    Widget_t *VibDepth;
-    Widget_t *VibRate;
-    Widget_t *TremDepth;
-    Widget_t *TremRate;
+    Widget_t *Resonance, *CutOff, *LpOnOff, *LpKeyTracking;
+    Widget_t *HpResonance, *HpCutOff, *HpOnOff, *HpKeyTracking;
+    Widget_t *Sharp, *Saw;
+    Widget_t *FadeOut, *PmFreq, *PmDepth, *PmMode[4];
+    Widget_t *VibDepth, *VibRate, *VibOnOff;
+    Widget_t *TremDepth, *TremRate, *TremOnOff;
+    Widget_t *VelMode[3];
+
+    Widget_t *ObfResonance, *ObfCutOff, *ObfKeyTracking, *ObfMode, *ObfOnOff;
+    Widget_t *ChorusFreq, *ChorusDelay, *ChorusLev, *ChorusDepth, *ChorusOnOff;
+    Widget_t *RevRoomSize, *RevDamp, *RevMix, *RevOnOff;
 
     Window    p;
 
     SupportedFormats supportedFormats;
+    PitchTracker pt;
+    LoopGenerator lg;
+
+    std::vector<float> loopBuffer;
+    std::vector<float> loopBufferSave;
+    std::vector<float> sampleBuffer;
+    std::vector<float> sampleBufferSave;
 
     bool is_loaded;
     bool firstLoop;
     bool guiIsCreated;
+    bool inDrag;
     std::string newLabel;
     std::vector<std::string> keys;
     std::vector<std::string> presetFiles;
@@ -777,32 +938,112 @@ private:
     std::string presetFile;
     std::string presetDir;
     std::string presetName;
+    std::string filename;
+
     int loadPresetMIDI;
+    int lastPresetMIDI;
+    int currentPresetNum;
     
-    float attack;
-    float decay;
-    float sustain;
-    float release;
+    float attack, decay, sustain, release;
     float frequency;
-    float resonance;
-    float cutoff;
-    float hpresonance;
-    float hpcutoff;
-    float volume;
-    float sharp;
-    float saw;
+    float resonance, cutoff, lpkeytracking;
+    float hpresonance, hpcutoff, hpkeytracking;
+    float sharp, saw;
     float fadeout;
-    float pmfreq;
-    float pmdepth;
-    float vibdepth;
-    float vibrate;
-    float tremdepth;
-    float tremrate;
+    float pmfreq, pmdepth;
+    float vibdepth, vibrate;
+    float tremdepth, tremrate;
     float pitchwheel;
+    float obfresonance, obfcutoff, obfkeytracking, obfmode;
+    float chorusfreq, chorusdelay, choruslev, chorusdepth;
+    float revroomsize, revdamp, revmix;
+    int vibonoff, tremonoff, lponoff, hponoff, obfonoff, chorusonoff, revonoff;
     int pmmode;
+    int velmode;
     int useLoop;
     
     std::vector<float> analyseBuffer;
+
+/****************************************************************
+        connect controller value change callbacks
+****************************************************************/
+
+    ValueBinding<float> floatBindings[MAX_FLOAT_BINDINGS];
+    int floatBindingCount = 0;
+
+    ValueBinding<int> intBindings[MAX_INT_BINDINGS];
+    int intBindingCount = 0;
+
+    template<typename T>
+    static void valueChangedCallback(void* w_, void* /*unused*/) {
+        Widget_t* w = (Widget_t*)w_;
+        Loopino* self = (Loopino*)w->parent_struct;
+        auto* binding = (ValueBinding<T>*)w->user_data;
+
+        if (!binding || !self) return;
+
+        T value = (T)adj_get_value(w->adj);
+
+        self->*(binding->member) = value;
+        self->markDirty(binding->dirtyIndex);
+
+        if (binding->extra) {
+            binding->extra(self, value);
+        }
+    }
+
+    void connectValueChanged( Widget_t* widget, float Loopino::*member,
+                            int dirtyIndex, const char* tooltip,
+                            ExposeFunc expose, void (*extra)(Loopino*, float)) {
+        if (floatBindingCount >= MAX_FLOAT_BINDINGS) {
+            return;
+        }
+
+        auto* binding = &floatBindings[floatBindingCount++];
+        binding->member = member;
+        binding->dirtyIndex = dirtyIndex;
+        binding->extra = extra;
+
+        widget->user_data = binding;
+        widget->scale.gravity = ASPECT;
+        widget->func.value_changed_callback = valueChangedCallback<float>;
+
+        if (expose) {
+            widget->func.expose_callback = expose;
+        }
+
+        if (tooltip) {
+            widget->flags |= HAS_TOOLTIP;
+            add_tooltip(widget, tooltip);
+        }
+    }
+
+    void connectValueChanged( Widget_t* widget, int Loopino::*member,
+                            int dirtyIndex, const char* tooltip,
+                            ExposeFunc expose, void (*extra)(Loopino*, int)) {
+        if (intBindingCount >= MAX_INT_BINDINGS) {
+            return;
+        }
+
+        auto* binding = &intBindings[intBindingCount++];
+        binding->member = member;
+        binding->dirtyIndex = dirtyIndex;
+        binding->extra = extra;
+
+        widget->user_data = binding;
+        widget->scale.gravity = ASPECT;
+        widget->func.value_changed_callback = valueChangedCallback<int>;
+
+        if (expose) {
+            widget->func.expose_callback = expose;
+        }
+
+        if (tooltip) {
+            widget->flags |= HAS_TOOLTIP;
+            add_tooltip(widget, tooltip);
+        }
+    }
+
 
 /****************************************************************
                     Create loop samples
@@ -1073,10 +1314,24 @@ private:
         analyseBuffer.resize(40960);
         synth.getAnalyseBuffer(analyseBuffer.data(), 40960);
         loopFreq = pt.analyseBuffer(analyseBuffer.data(), 40960, jack_sr, loopRootkey);
-        double cor = loopFreq / 440.0f;
-        float midiFloat = 69.0f + 12.0f * std::log2((freq * cor) / 440.0f);
-        int midiNote = static_cast<int>(std::floor(midiFloat + 0.5f));
-        loopRootkey = std::clamp(midiNote, 0, 127);
+        double cor = 1.0;
+        loopRootkey = rootkey;
+        if (loopFreq > 30.0f && loopFreq < 999.0f) {
+            cor = loopFreq / 440.0f;
+            float midiFloat = 69.0f + 12.0f * std::log2((freq * cor) / 440.0f);
+            int midiNote = static_cast<int>(std::floor(midiFloat + 0.5f));
+            loopRootkey = std::clamp(midiNote, 0, 127);
+        } else {
+            loopRootkey = pt.getPitch(analyseBuffer.data(), 40960 , 1, (float)jack_sr, &loopPitchCorrection, &loopFreq);
+            if (loopFreq > 30.0f && loopFreq < 999.0f) {
+                cor = loopFreq / 440.0f;
+                float midiFloat = 69.0f + 12.0f * std::log2((freq * cor) / 440.0f);
+                int midiNote = static_cast<int>(std::floor(midiFloat + 0.5f));
+                loopRootkey = std::clamp(midiNote, 0, 127);
+            } else {
+                loopRootkey = rootkey;
+            }
+        }
         loopData->data = loopBuffer;
         loopData->sourceRate = (double)jack_sr;
         loopData->rootFreq = (double)(freq * cor);
@@ -1362,7 +1617,20 @@ private:
         XLockDisplay(w->app->dpy);
         #endif
         if (loadPresetMIDI > -1) {
-            std::string name = presetFiles[loadPresetMIDI];
+            int loadNew = -1;
+            if (loadPresetMIDI > lastPresetMIDI) {
+                loadNew = currentPresetNum + 1;
+            } else if (loadPresetMIDI < lastPresetMIDI) {
+                loadNew = currentPresetNum - 1;
+            }
+            if (loadNew > (int)presetFiles.size() - 1) {
+                loadNew = 0;
+            } else if (loadNew < 0) {
+                loadNew = presetFiles.size() - 1;
+            }
+            currentPresetNum = loadNew;
+            lastPresetMIDI = loadPresetMIDI;
+            std::string name = presetFiles[currentPresetNum];
             std::string path = getPathFor(name);
             loadPreset(path);
             loadPresetMIDI = -1;
@@ -1370,6 +1638,7 @@ private:
 
         wview->func.adj_callback = dummy_callback;
         playbutton->func.adj_callback = dummy_callback;
+        Volume->func.adj_callback = dummy_callback;
         if (ready) adj_set_value(wview->adj, (float) position);
         else {
             waitOne++;
@@ -1388,9 +1657,14 @@ private:
             adj_set_value(Record->adj, 0.0);
             expose_widget(Record);
         }
+        adj_set_value(Volume->adj, volume);
+        markDirty(5);
+        gain = std::pow(1e+01, 0.05 * volume);
+
         wheel_idle_callback(PitchWheel, nullptr);
         expose_widget(keyboard);
         expose_widget(wview);
+        expose_widget(Volume);
         #if defined(__linux__) || defined(__FreeBSD__) || \
             defined(__NetBSD__) || defined(__OpenBSD__)
         XFlush(w->app->dpy);
@@ -1398,6 +1672,7 @@ private:
         #endif
         wview->func.adj_callback = transparent_draw;
         playbutton->func.adj_callback = transparent_draw;
+        Volume->func.adj_callback = transparent_draw;
     }
 
 /****************************************************************
@@ -1456,12 +1731,30 @@ private:
     }
 
     // loop size control (Periods to use)
+    static void setLoopSize_released(void *w_, void *button_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->inDrag = false;
+        if (w->flags & HAS_POINTER) w->state= 1;
+        expose_widget(w);
+        if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
+    }
+
+    // loop size control (Periods to use)
+    static void setLoopSize_indrag(void *w_, void *button_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->inDrag = true;
+        if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
+    }
+
+    // loop size control (Periods to use)
     static void setLoopSize_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->loopPeriods = (int)(adj_get_value(w->adj));
         self->markDirty(7);
-        if (self->af.samples) button_setLoop_callback(self->setLoop, NULL);
+        if (self->af.samples && ! self->inDrag) button_setLoop_callback(self->setLoop, NULL);
     }
 
     // set next Loop
@@ -1684,105 +1977,35 @@ private:
         }
     }
 
-    // Attack control
-    static void attack_callback(void *w_, void* user_data) {
+    // LP keytracking control
+    static void lpkeytracking_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->attack = adj_get_value(w->adj);
-        self->markDirty(0);
-        self->synth.setAttack(self->attack);
+        Wheel *wheel = (Wheel*)w->private_struct;
+        self->lpkeytracking = (wheel->value + 1.0f) * 0.5f;
+        self->markDirty(20);
+        self->synth.setLpKeyTracking(self->lpkeytracking);
     }
 
-    // Decay control
-    static void decay_callback(void *w_, void* user_data) {
+    // HP keytracking control
+    static void hpkeytracking_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->decay = adj_get_value(w->adj);
-        self->markDirty(1);
-        self->synth.setDecay(self->decay);
+        Wheel *wheel = (Wheel*)w->private_struct;
+        self->hpkeytracking = (wheel->value + 1.0f) * 0.5f;
+        self->markDirty(21);
+        self->synth.setHpKeyTracking(self->hpkeytracking);
     }
 
-    // Sustain control
-    static void sustain_callback(void *w_, void* user_data) {
+    // OBF keytracking control
+    static void obfkeytracking_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->sustain = adj_get_value(w->adj);
-        self->markDirty(2);
-        self->synth.setSustain(self->sustain);
+        Wheel *wheel = (Wheel*)w->private_struct;
+        self->obfkeytracking = (wheel->value + 0.3f) * 0.3f;  // (value -0.3) / 0.3
+        self->markDirty(24);
+        self->synth.setKeyTrackingObf(self->obfkeytracking);
     }
-
-    // Release control
-    static void release_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->release = adj_get_value(w->adj);
-        self->markDirty(3);
-        self->synth.setRelease(self->release);
-    }
-
-    // Frequency control
-    static void frequency_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->frequency = adj_get_value(w->adj);
-        self->markDirty(4);
-        self->synth.setRootFreq(self->frequency);
-    }
-
-    // Resonance control
-    static void resonance_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->resonance = adj_get_value(w->adj);
-        self->markDirty(8);
-        self->synth.setResoLP((int)self->resonance);
-    }
-
-    // Cutoff control
-    static void cutoff_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->cutoff = adj_get_value(w->adj);
-        self->markDirty(9);
-        self->synth.setCutoffLP((int)self->cutoff);
-    }
-
-    // Resonance control
-    static void hpresonance_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->hpresonance = adj_get_value(w->adj);
-        self->markDirty(15);
-        self->synth.setResoHP((int)self->hpresonance);
-    }
-
-    // Cutoff control
-    static void hpcutoff_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->hpcutoff = adj_get_value(w->adj);
-        self->markDirty(16);
-        self->synth.setCutoffHP((int)self->hpcutoff);
-    }
-
-    // pmfreq control
-    static void pmfreq_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->pmfreq = adj_get_value(w->adj);
-        self->markDirty(13);
-        self->synth.setPmFreq(self->pmfreq);
-    }
-
-    // pmdepth control
-    static void pmdepth_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->pmdepth = adj_get_value(w->adj);
-        self->markDirty(14);
-        self->synth.setPmDepth(self->pmdepth);
-    }
-
 
     void radio_box_set_active(Widget_t *w) {
         Widget_t * p = (Widget_t*)w->parent;
@@ -1813,40 +2036,33 @@ private:
         }
     }
 
-    // VibDepth control
-    static void vibdepth_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->vibdepth = adj_get_value(w->adj);
-        self->markDirty(15);
-        self->synth.setvibDepth(self->vibdepth);
+    void velocity_box_set_active(Widget_t *w) {
+        Widget_t * p = (Widget_t*)w->parent;
+        int response = 0;
+        int i = 0;
+        for(;i<p->childlist->elem;i++) {
+            Widget_t *wid = p->childlist->childs[i];
+            if (wid->adj && wid->flags & IS_RADIO) {
+                if (wid != w) adj_set_value(wid->adj_y, 0.0);
+                else if (wid == w) {
+                    velmode = response;
+                    markDirty(22);
+                    if (adj_get_value(wid->adj) != 1.0)
+                        adj_set_value(wid->adj, 1.0);
+                    synth.setVelMode(velmode);
+                }
+                ++response;
+            }
+        }
     }
 
-    // VibRate control
-    static void vibrate_callback(void *w_, void* user_data) {
+    // velmode control
+    static void radio_box_velocity_pressed(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->vibrate = adj_get_value(w->adj);
-        self->markDirty(16);
-        self->synth.setvibRate(self->vibrate);
-    }
-
-    // Tremolo Depth control
-    static void tremdepth_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->tremdepth = adj_get_value(w->adj);
-        self->markDirty(17);
-        self->synth.settremDepth(self->tremdepth);
-    }
-
-    // Tremolo Rate control
-    static void tremrate_callback(void *w_, void* user_data) {
-        Widget_t *w = (Widget_t*)w_;
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        self->tremrate = adj_get_value(w->adj);
-        self->markDirty(18);
-        self->synth.settremRate(self->tremrate);
+        if (w->flags & HAS_FOCUS) {
+            self->velocity_box_set_active(w);
+        }
     }
 
     // Pitch wheel control
@@ -1864,8 +2080,9 @@ private:
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->volume = adj_get_value(w->adj);
-        self->markDirty(5);
+        self->markDirty(5); // FIXME
         self->gain = std::pow(1e+01, 0.05 * self->volume);
+        self->synth.setGain(self->gain);
     }
 
     // sharp control
@@ -1976,7 +2193,7 @@ private:
 
     static void rounded_frame(cairo_t *cr,float x, float y, float w, float h, float lsize) {
         cairo_new_path (cr);
-        float r = 12.0;
+        float r = 10.0;
         cairo_move_to(cr, x+lsize+r,y);
         cairo_line_to(cr, x+w-r,y);
         cairo_curve_to(cr, x+w,y,x+w,y,x+w,y+r);
@@ -2000,7 +2217,7 @@ private:
         cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
         cairo_set_font_size (w->crb, w->app->normal_font/w->scale.ascale);
         cairo_text_extents(w->crb,"Abc" , &extents);
-        cairo_move_to (w->crb, 20, extents.height);
+        cairo_move_to (w->crb, 17, extents.height);
         cairo_show_text(w->crb, w->label);
         cairo_new_path (w->crb);
 
@@ -2008,7 +2225,7 @@ private:
         cairo_set_line_width(w->crb,2);
         setFrameColour(w, 5, 5, width_t-10, height_t-10);
         //cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
-        rounded_frame(w->crb, 5, 5, width_t-10, height_t-8, extents.width+10);
+        rounded_frame(w->crb, 5, 5, width_t-10, height_t-8, extents.width+7);
         cairo_stroke(w->crb);
     }
 
@@ -2325,6 +2542,117 @@ private:
         cairo_paint (w->crb);
     }
 
+
+
+void knobShadowOutset(cairo_t* const cr, int width, int height, int x, int y) {
+    cairo_pattern_t *pat = cairo_pattern_create_linear (x, y, x + width, y + height);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 0, 0.33, 0.33, 0.33, 1);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 0.45, 0.33 * 0.6, 0.33 * 0.6, 0.33 * 0.6, 0.4);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 0.65, 0.05 * 2.0, 0.05 * 2.0, 0.05 * 2.0, 0.4);
+    cairo_pattern_add_color_stop_rgba 
+        (pat, 1, 0.05, 0.05, 0.05, 1);
+    cairo_pattern_set_extend(pat, CAIRO_EXTEND_NONE);
+    cairo_set_source(cr, pat);
+    cairo_fill_preserve (cr);
+    cairo_pattern_destroy (pat);
+}
+
+void knobShadowInset(cairo_t* const cr, int width, int height, int x, int y) {
+    cairo_pattern_t* pat = cairo_pattern_create_linear (x, y, x + width, y + height);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 1, 0.33, 0.33, 0.33, 1);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 0.65, 0.33 * 0.6, 0.33 * 0.6, 0.33 * 0.6, 0.4);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 0.55, 0.05 * 2.0, 0.05 * 2.0, 0.05 * 2.0, 0.4);
+    cairo_pattern_add_color_stop_rgba
+        (pat, 0, 0.05, 0.05, 0.05, 1);
+    cairo_pattern_set_extend(pat, CAIRO_EXTEND_NONE);
+    cairo_set_source(cr, pat);
+    cairo_fill (cr);
+    cairo_pattern_destroy (pat);
+}
+
+static void draw_my_vswitch(void *w_, void* user_data) {
+    Widget_t *wid = (Widget_t*)w_;
+    Loopino *self = static_cast<Loopino*>(wid->parent_struct);
+    const int x = wid->width * 0.125;
+    const int y = wid->height * 0.2;
+    const int w = wid->width * 0.75;
+    const int h = wid->height * 0.6;
+    const int state = (int)adj_get_state(wid->adj);
+
+    const int centerW = w * 0.5;
+    const int centerH = state ? centerW : h - centerW ;
+    const int offset = w * 0.21;
+
+    cairo_push_group (wid->crb);
+    
+    self->roundrec(wid->crb, x+1, y+1, w-2, h-2, centerW);
+    self->knobShadowOutset(wid->crb, w  , h, x, y);
+    cairo_stroke_preserve (wid->crb);
+
+    cairo_new_path(wid->crb);
+    self->roundrec(wid->crb, x+offset, y+offset, w - (offset * 2), h - (offset * 2), centerW-offset);
+    cairo_set_source_rgba(wid->crb, 0.05, 0.05, 0.05, 1);
+    cairo_fill_preserve(wid->crb);
+
+    cairo_set_source_rgba(wid->crb, 0.05, 0.05, 0.05, 1);
+    cairo_set_line_width(wid->crb,1);
+    cairo_stroke_preserve (wid->crb);
+
+    cairo_new_path(wid->crb);
+    cairo_arc(wid->crb,x+centerW, y+centerH, w/2.8, 0, 2 * M_PI );
+    use_bg_color_scheme(wid, PRELIGHT_);
+    cairo_fill_preserve(wid->crb);
+    self->knobShadowOutset(wid->crb, w * 0.5 , h, x+centerH - centerW, y);
+    cairo_set_source_rgba(wid->crb, 0.05, 0.05, 0.05, 1);
+    cairo_set_line_width(wid->crb,1);
+    cairo_stroke_preserve (wid->crb);
+
+    cairo_new_path(wid->crb);
+    cairo_arc(wid->crb,x+centerW, y+centerH, w/3.6, 0, 2 * M_PI );
+    if(wid->state==1) use_bg_color_scheme(wid, PRELIGHT_);
+    else use_bg_color_scheme(wid, NORMAL_);
+    cairo_fill_preserve(wid->crb);
+    self->knobShadowInset(wid->crb, w * 0.5 , h, x+centerH - centerW, y);
+    cairo_stroke (wid->crb);
+
+    /** show label below the switch**/
+    cairo_text_extents_t extents;
+    cairo_select_font_face (wid->crb, "Sans", CAIRO_FONT_SLANT_NORMAL,
+                               CAIRO_FONT_WEIGHT_BOLD);
+    if (!state) {
+        use_fg_color_scheme(wid, INSENSITIVE_);
+    } else {
+        use_fg_color_scheme(wid, PRELIGHT_);
+    }
+
+    cairo_set_font_size (wid->crb, wid->app->small_font/wid->scale.ascale);
+    cairo_text_extents(wid->crb,"On" , &extents);
+    cairo_move_to (wid->crb, (wid->width*0.5)-(extents.width*0.5), 4+(extents.height));
+    cairo_show_text(wid->crb, "On");
+    cairo_new_path (wid->crb);
+    /** show label above the switch**/
+    if (state) {
+        use_fg_color_scheme(wid, INSENSITIVE_);
+    } else {
+        use_fg_color_scheme(wid, PRELIGHT_);
+    }
+    cairo_set_font_size (wid->crb, wid->app->small_font/wid->scale.ascale);
+    cairo_text_extents(wid->crb,wid->label , &extents);
+    cairo_move_to (wid->crb, (wid->width*0.5)-(extents.width*0.5), wid->height -(extents.height*0.8));
+    cairo_show_text(wid->crb, wid->label);
+    cairo_new_path (wid->crb);
+
+    cairo_pop_group_to_source (wid->crb);
+    cairo_paint (wid->crb);
+}
+
+
 /****************************************************************
                       Preset handling
 ****************************************************************/
@@ -2396,6 +2724,7 @@ private:
                 Loopino *self = static_cast<Loopino*>(w->parent_struct);
                 self->presetName = (*(const char**)user_data);
                 self->savePreset(self->getPathFor(self->presetName));
+                self->createPrestList();
             }
         };
     }
@@ -2433,11 +2762,28 @@ private:
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
             self->saveAs();
         };
+        loadSub->func.enter_callback = [](void *w_, void *user_data) {
+            Widget_t *w = (Widget_t*)w_;
+            Metrics_t metrics;
+            os_get_window_metrics(w, &metrics);
+            if (!metrics.visible) return;
+            if (childlist_has_child(w->childlist)) {
+                if (w->app->submenu) {
+                    if (w->app->submenu != w->childlist->childs[0]) {
+                        widget_hide(w->app->submenu);
+                        w->app->submenu = NULL;
+                    }
+                }
+                pop_submenu_show(w, w->childlist->childs[0], 24, false);
+            }
+            os_transparent_draw(w_, user_data);
+        };
         loadSub->func.value_changed_callback = [](void *w_, void *user_data) {
             Widget_t *w = (Widget_t*)w_;
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
             int id = (int)w->adj->value;
             if (id >= 0 && id < (int)self->presetFiles.size()) {
+                self->currentPresetNum = id;
                 std::string name = self->presetFiles[id];
                 std::string path = self->getPathFor(name);
                 self->loadPreset(path);
@@ -2453,7 +2799,7 @@ private:
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
             self->showExportWindow();
         };
-        pop_menu_show(w, menu, 8, true);
+        pop_menu_show(w, menu, 24, true);
 
     }
 
@@ -2538,8 +2884,8 @@ private:
         for (size_t i = 0; i < numData; ++i) {
             maxVal = max(maxVal, std::fabs(samples[i]));
         }
-        if (maxVal < 1e-9f) maxVal = 1.0f;
-        
+        if (maxVal < 0.9999f) maxVal = 1.0f;
+
         for (size_t i = 0; i < numData; ++i) {
             float normalized = samples[i] / maxVal;
             int16_t encoded = static_cast<int16_t>(std::round(normalized * 32767.0f));
@@ -2575,7 +2921,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 9; // guard for future proof
+        header.version = 11; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -2608,6 +2954,31 @@ private:
         // since version 9
         writeControllerValue(out, HpResonance);
         writeControllerValue(out, HpCutOff);
+        // since version 10
+        writeValue(out, lpkeytracking);
+        writeValue(out, hpkeytracking);
+        writeValue(out, velmode);
+        // since version 11
+        writeControllerValue(out, Volume);
+        writeControllerValue(out, ObfMode);
+        writeValue(out, obfkeytracking);
+        writeControllerValue(out, ObfResonance);
+        writeControllerValue(out, ObfCutOff);
+        writeControllerValue(out, ObfOnOff);
+        writeControllerValue(out, LpOnOff);
+        writeControllerValue(out, HpOnOff);
+        writeControllerValue(out, VibOnOff);
+        writeControllerValue(out, TremOnOff);
+
+        writeControllerValue(out, ChorusOnOff);
+        writeControllerValue(out, ChorusLev);
+        writeControllerValue(out, ChorusDelay);
+        writeControllerValue(out, ChorusDepth);
+        writeControllerValue(out, ChorusFreq);
+        writeControllerValue(out, RevOnOff);
+        writeControllerValue(out, RevRoomSize);
+        writeControllerValue(out, RevDamp);
+        writeControllerValue(out, RevMix);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         out.close();
@@ -2629,7 +3000,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 9) {
+        if (header.version > 11) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -2670,6 +3041,43 @@ private:
         if (header.version > 8) {
             readControllerValue(in, HpResonance);
             readControllerValue(in, HpCutOff);
+        }
+        if (header.version > 9) {
+            readValue(in, lpkeytracking);
+            wheel_set_value(LpKeyTracking, (lpkeytracking * 2.0f) - 1.0f);
+            synth.setLpKeyTracking(lpkeytracking);
+            readValue(in, hpkeytracking);
+            wheel_set_value(HpKeyTracking, (hpkeytracking * 2.0f) - 1.0f);
+            synth.setHpKeyTracking(hpkeytracking);
+            readValue(in, velmode);
+            velocity_box_set_active(VelMode[velmode]);
+            expose_widget(LpKeyTracking);
+            expose_widget(HpKeyTracking);
+        }
+        if (header.version > 10) {
+            readControllerValue(in, Volume);
+            readControllerValue(in, ObfMode);
+            readValue(in, obfkeytracking);
+            wheel_set_value(ObfKeyTracking, (obfkeytracking -0.3) / 0.3);
+            readControllerValue(in, ObfResonance);
+            readControllerValue(in, ObfCutOff);
+            readControllerValue(in, ObfOnOff);
+            readControllerValue(in, LpOnOff);
+            readControllerValue(in, HpOnOff);
+            readControllerValue(in, VibOnOff);
+            readControllerValue(in, TremOnOff);
+
+            readControllerValue(in, ChorusOnOff);
+            readControllerValue(in, ChorusLev);
+            readControllerValue(in, ChorusDelay);
+            readControllerValue(in, ChorusDepth);
+            readControllerValue(in, ChorusFreq);
+            readControllerValue(in, RevOnOff);
+            readControllerValue(in, RevRoomSize);
+            readControllerValue(in, RevDamp);
+            readControllerValue(in, RevMix);
+
+            expose_widget(ObfKeyTracking);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);

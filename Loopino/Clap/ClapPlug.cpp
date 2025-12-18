@@ -18,7 +18,7 @@ typedef struct plugin_t plugin_t;
 #define RUN_AS_PLUGIN
 
 #define WINDOW_WIDTH  880
-#define WINDOW_HEIGHT 390
+#define WINDOW_HEIGHT 490
 
 #if defined(_WIN32)
 #define GUIAPI CLAP_WINDOW_API_WIN32
@@ -455,6 +455,13 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
                         plug->r->synth.setResoLP((int)ev->data[2]);
                     } else if (ev->data[1]== 74) {
                         plug->r->synth.setCutoffLP((int)ev->data[2]);
+                    } else if (ev->data[1] == 7) {    // CC7 Volume
+                        constexpr float min_dB = -20.0f;
+                        constexpr float max_dB =  12.0f;
+                        plug->r->volume = min_dB + ((float)ev->data[2] / 127.0f) * (max_dB - min_dB);
+                        plug->r->markDirty(5);
+                        if (!plug->guiIsCreated)
+                            plug->r->gain = std::pow(1e+01, 0.05 * plug->r->volume);
                     }
                 } else if ((ev->data[0] & 0xf0) == 0xE0) {   // PitchBend
                     int lsb = ev->data[1];
@@ -536,7 +543,6 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         memset(right_output, 0.0, nframes * sizeof(float));
     }
     
-    float fSlow0 = 0.0010000000000000009 * plug->r->gain;
     for (uint32_t i = 0; i < nframes; i++) {
         // process events
         while (ev_index < nev && next_ev_frame == i) {
@@ -556,11 +562,9 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
             }
         }
         // process synth
-        fRec0[0] = fSlow0 + 0.999 * fRec0[1];
-        float out = plug->r->synth.process() * fRec0[0];
+        float out = plug->r->synth.process();
         left_output[i] += out;
         right_output[i] += out;
-        fRec0[1] = fRec0[0];
     }
 
     return CLAP_PROCESS_CONTINUE;
