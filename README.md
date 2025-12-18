@@ -26,10 +26,16 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 - Preset save/load system
 - Export processed samples/loops as WAV in selected key
 - LP/HP ladder filter with resonance & cutoff
+- Oberheim Filter
 - Phase modulators: sine, triangle, noise & Juno-style
 - Vibrato & tremolo
+- Chorus & Reverb 
+- Pitch Wheel support
+- MIDI PC support
 - Root frequency control
 - Up to 48 voices for polyphonic playback
+- Full ALSA Audio & RAW MIDI support
+- Full jack-audio-connection-kit support
 
 
 The GUI is created with libxputty.
@@ -43,9 +49,13 @@ The GUI is created with libxputty.
 
 - libsndfile1-dev
 - libfftw3-dev
-- libjack(-jackd2)-dev
 - libcairo2-dev
 - libx11-dev
+
+# Additional Dependencies for standalone Version
+
+- libjack(-jackd2)-dev
+- libasound2-dev
 
 ## Building the Standalone from source code
 

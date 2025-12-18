@@ -147,7 +147,7 @@ public:
 
         if (n == -EPIPE) {
             xruns.fetch_add(1, std::memory_order_relaxed);
-            std::cout << "Xrun Overrun " << xruns.load(std::memory_order_relaxed) << std::endl;
+            //std::cout << "Xrun Overrun " << xruns.load(std::memory_order_relaxed) << std::endl;
             snd_pcm_prepare(pcm_in);
             uiPtr->record = false;
             rec = false;
@@ -214,7 +214,7 @@ public:
 
             if (written == -EPIPE) {
                 xruns.fetch_add(1, std::memory_order_relaxed);
-                std::cout << "Xrun Underrun " << xruns.load(std::memory_order_relaxed) << std::endl;
+                //std::cout << "Xrun Underrun " << xruns.load(std::memory_order_relaxed) << std::endl;
                 snd_pcm_prepare(pcm);
             }
             else if (written == -ESTRPIPE) {
