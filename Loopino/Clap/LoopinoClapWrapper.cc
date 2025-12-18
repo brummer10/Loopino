@@ -243,6 +243,7 @@
 
     void quitGui() {
         fetch.stop();
+        clearValueBindings();
         onExit();
     }
 

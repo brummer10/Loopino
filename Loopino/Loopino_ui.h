@@ -272,6 +272,11 @@ public:
         #endif
     }
 
+    void clearValueBindings() {
+        floatBindingCount = 0;
+        intBindingCount = 0;
+    }
+
 /****************************************************************
                  Clap wrapper
 ****************************************************************/
