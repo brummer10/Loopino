@@ -22,6 +22,8 @@
 
 Loopino ui;
 
+#include "CmdParser.h"
+#include "RtCheck.h"
 #include "jack.cc"
 #include "AlsaAudioOut.h"
 #include "AlsaMidiIn.h"
@@ -86,15 +88,26 @@ int main(int argc, char *argv[]){
     if(0 == XInitThreads()) 
         std::cerr << "Warning: XInitThreads() failed\n" << std::endl;
 
-    if (argc > 1) {
-        mididevice = argv[1];
+    CmdParser cmd;
+
+    if (!cmd.parseCmdLine(argc, argv)) {
+        cmd.printUsage(argv[0]);
+        return 1;
     }
 
+    mididevice =
+        cmd.opts.midiDevice.value_or("");
+
+    float scaling =
+        cmd.opts.scaling.value_or(1.0f);
+
     Xputty app;
+    RtCheck rtcheck;
     AlsaAudioOut out;
     std::condition_variable Sync;
 
     main_init(&app);
+    if (scaling != 1.0f) app.hdpi = scaling;
     ui.createGUI(&app);
 
     signal (SIGQUIT, signal_handler);
@@ -103,7 +116,8 @@ int main(int argc, char *argv[]){
     signal (SIGINT, signal_handler);
 
     if (!startJack()) {
-        if (out.init(&ui)) out.start();
+        rtcheck.start();
+        if (out.init(&ui, &rtcheck)) out.start();
         if (!mididevice.empty()) {
             if (rawmidi.open(mididevice.data(), &ui)) {
                 rawmidi.start();
@@ -116,6 +130,7 @@ int main(int argc, char *argv[]){
             devices = rawmidi.listAlsaRawMidiInputs();
             showMidiDeviceSelect();
         }
+        rtcheck.stop();
     }
 
     main_run(&app);

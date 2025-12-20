@@ -21,29 +21,29 @@
         param.registerParam("Volume",    "Synth", -20.0, 6.0, 0.0, 0.1,   (void*)&volume,      false,  IS_FLOAT);
         param.registerParam("Use Loop",  "Synth", 0, 1, 0, 1,             (void*)&useLoop,     true,   IS_INT);
         param.registerParam("Loop Size", "Synth", 1, 12, 1, 1,            (void*)&loopPeriods, true,   IS_INT);
-        param.registerParam("Resonance", "Synth", 0.0, 127.0, 0.0, 1.0,   (void*)&resonance,   false,  IS_FLOAT);
-        param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 127.0, 1.0, (void*)&cutoff,      false,  IS_FLOAT);
-        param.registerParam("Sharp",     "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&sharp,       false,  IS_FLOAT);
-        param.registerParam("Saw",       "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&saw,         false,  IS_FLOAT);
-        param.registerParam("FadeOut",   "Synth", 0.0, 1.0, 1.0, 0.01,    (void*)&fadeout,     false,  IS_FLOAT);
+        param.registerParam("Resonance", "Synth", 0.0, 127.0, 68.0, 1.0,  (void*)&resonance,   false,  IS_FLOAT);
+        param.registerParam("Cutoff",    "Synth", 0.0, 127.0, 68.0, 1.0,  (void*)&cutoff,      false,  IS_FLOAT);
+        param.registerParam("Sharp",     "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&sharp,       false,  IS_FLOAT);
+        param.registerParam("Saw",       "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&saw,         false,  IS_FLOAT);
+        param.registerParam("FadeOut",   "Synth", 0.0, 1.0, 0.0, 0.01,    (void*)&fadeout,     false,  IS_FLOAT);
         param.registerParam("PmFreq",       "PM", 0.01, 30.0, 0.01, 0.01, (void*)&pmfreq,      false,  IS_FLOAT);
         param.registerParam("PmDepth",      "PM", 0.0, 1.0, 0.0, 0.01,    (void*)&pmdepth,     false,  IS_FLOAT);
         param.registerParam("PmMode",       "PM", 0, 3, 1, 1,             (void*)&pmmode,      true,   IS_INT);
-        param.registerParam("VibDepth","Vibrato", 0.0, 1.0, 0.0, 0.01,    (void*)&vibdepth,    false,  IS_FLOAT);
+        param.registerParam("VibDepth","Vibrato", 0.0, 1.0, 0.6, 0.01,    (void*)&vibdepth,    false,  IS_FLOAT);
         param.registerParam("VibRate", "Vibrato", 0.1, 12.0, 5.0, 0.01,   (void*)&vibrate,     false,  IS_FLOAT);
-        param.registerParam("TremDepth","Tremolo",0.0, 1.0, 0.0, 0.01,    (void*)&tremdepth,   false,  IS_FLOAT);
+        param.registerParam("TremDepth","Tremolo",0.0, 1.0, 0.3, 0.01,    (void*)&tremdepth,   false,  IS_FLOAT);
         param.registerParam("TremRate","Tremolo", 0.1, 15.0, 5.0, 0.01,   (void*)&tremrate,    false,  IS_FLOAT);
-        param.registerParam("HP Resonance",  "HP",0.0, 127.0, 0.0, 1.0,   (void*)&hpresonance, false,  IS_FLOAT);
-        param.registerParam("HP Cutoff",     "HP", 0.0, 127.0, 127.0, 1.0,(void*)&hpcutoff,    false,  IS_FLOAT);
+        param.registerParam("HP Resonance",  "HP",0.0, 127.0, 50.0, 1.0,  (void*)&hpresonance, false,  IS_FLOAT);
+        param.registerParam("HP Cutoff",     "HP", 0.0, 127.0, 48.0, 1.0, (void*)&hpcutoff,    false,  IS_FLOAT);
         param.registerParam("Pitch Bend", "Synth", -1.0, 1.0, 0.0, 0.01,  (void*)&pitchwheel,  false,  IS_FLOAT);
-        param.registerParam("LP Keytracking","LP", 0.0, 1.0, 0.0, 0.01,  (void*)&lpkeytracking,false,  IS_FLOAT);
-        param.registerParam("HP Keytracking","HP", 0.0, 1.0, 0.0, 0.01,  (void*)&hpkeytracking,false,  IS_FLOAT);
-        param.registerParam("Velocity Mode","Synth",  0, 2, 1, 1,         (void*)&velmode,     true,   IS_INT);
+        param.registerParam("LP Keytracking","LP", 0.0, 1.0, 1.0, 0.01,  (void*)&lpkeytracking,false,  IS_FLOAT);
+        param.registerParam("HP Keytracking","HP", 0.0, 1.0, 1.0, 0.01,  (void*)&hpkeytracking,false,  IS_FLOAT);
+        param.registerParam("Velocity Mode","Synth",  0, 2, 1, 1,         (void*)&velmode,      true,  IS_INT);
 
         //                  name           group   min, max, def, step   value              isStepped  type
-        param.registerParam("Obf Mode",     "OBF", 0.0, 1.0, 0.0, 0.01,   (void*)&obfmode,     false,  IS_FLOAT);
-        param.registerParam("Obf Keytracking","OBF",0.0, 1.0, 0.0, 0.01,(void*)&obfkeytracking,false,  IS_FLOAT);
-        param.registerParam("Obf Resonance","OBF",0.0, 0.6, 0.0, 0.01,    (void*)&obfresonance,false,  IS_FLOAT);
+        param.registerParam("Obf Mode",     "OBF", 0.0, 1.0, 0.5, 0.01,   (void*)&obfmode,     false,  IS_FLOAT);
+        param.registerParam("Obf Keytracking","OBF",0.0, 1.0, 0.3, 0.01,(void*)&obfkeytracking,false,  IS_FLOAT);
+        param.registerParam("Obf Resonance","OBF",0.0, 0.6, 0.3, 0.01,    (void*)&obfresonance,false,  IS_FLOAT);
         param.registerParam("Obf CutOff",  "OBF",40.0, 12000.6, 1000.0, 0.1,(void*)&obfcutoff, false,  IS_FLOAT);
         param.registerParam("Obf On/Off",  "OBF", 0, 1, 0, 1,             (void*)&obfonoff,     true,  IS_INT);
         param.registerParam("LP On/Off" ,   "LP", 0, 1, 0, 1,             (void*)&lponoff,      true,  IS_INT);
@@ -52,13 +52,18 @@
         param.registerParam("Trem On/Off","Tremolo",0, 1, 0, 1,            (void*)&tremonoff,   true,  IS_INT);
         param.registerParam("Chorus On/Off","Chorus",0, 1, 0, 1,           (void*)&chorusonoff, true,  IS_INT);
         param.registerParam("Chorus Level","Chorus", 0.0, 1.0, 0.5, 0.01,  (void*)&choruslev,  false,  IS_FLOAT);
-        param.registerParam("Chorus Delay","Chorus", 0.0, 0.2, 0.002, 0.001,(void*)&chorusdelay,false, IS_FLOAT);
+        param.registerParam("Chorus Delay","Chorus", 0.0, 0.2, 0.02, 0.001,(void*)&chorusdelay,false, IS_FLOAT);
         param.registerParam("Chorus Depth","Chorus", 0.0, 1.0, 0.02, 0.001,(void*)&chorusdepth,false,  IS_FLOAT);
         param.registerParam("Chorus Freq", "Chorus", 0.1, 10.0, 3.0, 0.001,(void*)&chorusfreq, false,  IS_FLOAT);
         param.registerParam("Reverb On/Off","Reverb",0, 1, 0, 1,           (void*)&revonoff,    true,  IS_INT);
         param.registerParam("Reverb Room",  "Reverb",0.0, 1.0, 0.0, 0.01, (void*)&revroomsize, false,  IS_FLOAT);
         param.registerParam("Reverb Damp",  "Reverb",0.0, 1.0, 0.25, 0.01,(void*)&revdamp,     false,  IS_FLOAT);
         param.registerParam("Reverb Mix",  "Reverb",0.0, 100.0, 50.0, 1.0,(void*)&revmix,      false,  IS_FLOAT);
+        param.registerParam("Wasp On/Off", "Wasp",0, 1, 0, 1,             (void*)&wasponoff,    true,  IS_INT);
+        param.registerParam("Wasp Mix",    "Wasp",-1.0, 1.0, 0.0, 0.01,   (void*)&waspmix,     false,  IS_FLOAT);
+        param.registerParam("Wasp Resonance","Wasp",0.0, 1.0, 0.4, 0.01, (void*)&waspresonance,false,  IS_FLOAT);
+        param.registerParam("Wasp CutOff","Wasp",40.0, 12000.0, 1000.0, 0.01,(void*)&waspcutoff,false, IS_FLOAT);
+        param.registerParam("Wasp Keytracking","Wasp",0.0, 1.0, 0.5, 0.01,(void*)&waspkeytracking,false,IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -93,7 +98,7 @@
             adj_set_value(ObfOnOff->adj, (float)obfonoff);
             adj_set_value(LpOnOff->adj, (float)lponoff);
             adj_set_value(HpOnOff->adj, (float)hponoff);
-            wheel_set_value(ObfKeyTracking, (obfkeytracking -0.3) / 0.3);
+            wheel_set_value(ObfKeyTracking, (obfkeytracking -0.3) * 3.33333);
             adj_set_value(ObfResonance->adj, obfresonance);
             adj_set_value(ObfCutOff->adj, obfcutoff);
             adj_set_value(VibOnOff->adj, (float)vibonoff);
@@ -109,53 +114,71 @@
             adj_set_value(RevDamp->adj, revdamp);
             adj_set_value(RevMix->adj, revmix);
 
+            adj_set_value(WaspOnOff->adj, (float)wasponoff);
+            adj_set_value(WaspMix->adj, waspmix);
+            adj_set_value(WaspResonance->adj, waspresonance);
+            adj_set_value(WaspCutOff->adj, waspcutoff);
+            wheel_set_value(WaspKeyTracking, (waspkeytracking * 2.0f) - 1.0f);
+
             expose_widget(LpKeyTracking);
             expose_widget(HpKeyTracking);
             expose_widget(ObfKeyTracking);
+            expose_widget(WaspKeyTracking);
+            expose_widget(PitchWheel);
         } else {
-            synth.setAttack(attack);
-            synth.setDecay(decay);
-            synth.setSustain(sustain);
-            synth.setRelease(release);
-            synth.setRootFreq(frequency);
-            synth.setLoop(useLoop);
-            gain = std::pow(1e+01, 0.05 * volume);
-            synth.setGain(gain);
-            synth.setResoLP(resonance);
-            synth.setCutoffLP(cutoff);
-            synth.setPmFreq(pmfreq);
-            synth.setPmDepth(pmdepth);
-            synth.setPmMode(pmmode);
-            synth.setvibDepth(vibdepth);
-            synth.setvibRate(vibrate);
-            synth.settremDepth(tremdepth);
-            synth.settremRate(tremrate);
-            synth.setResoHP(hpresonance);
-            synth.setCutoffHP(hpcutoff);
-            synth.setPitchWheel(pitchwheel);
-            synth.setLpKeyTracking(lpkeytracking);
-            synth.setHpKeyTracking(hpkeytracking);
-            synth.setVelMode(velmode);
-            synth.setModeObf(obfmode);
-            synth.setKeyTrackingObf(obfkeytracking);
-            synth.setResonanceObf(obfresonance);
-            synth.setCutOffObf(obfcutoff);
-            synth.setOnOffObf(obfonoff);
-            synth.setOnOffLP(lponoff);
-            synth.setOnOffHP(hponoff);
-            synth.setOnOffVib(vibonoff);
-            synth.setOnOffTrem(tremonoff);
-            synth.setChorusOnOff(chorusonoff);
-            synth.setChorusLevel(choruslev);
-            synth.setChorusDelay(chorusdelay);
-            synth.setChorusDepth(chorusdepth);
-            synth.setChorusFreq(chorusfreq);
-            synth.setReverbOnOff(revonoff);
-            synth.setReverbRoomSize( 0.9f + revroomsize  * (1.05f - 0.9f));
-            synth.setReverbDamp(revdamp);
-            synth.setReverbMix(revmix);
+            syncValuesToSynth();
         }
     }
+    void syncValuesToSynth() {
+        synth.setAttack(attack);
+        synth.setDecay(decay);
+        synth.setSustain(sustain);
+        synth.setRelease(release);
+        synth.setRootFreq(frequency);
+        synth.setLoop(useLoop);
+        gain = std::pow(1e+01, 0.05 * volume);
+        synth.setGain(gain);
+        synth.setResoLP(resonance);
+        synth.setCutoffLP(cutoff);
+        synth.setPmFreq(pmfreq);
+        synth.setPmDepth(pmdepth);
+        synth.setPmMode(pmmode);
+        synth.setvibDepth(vibdepth);
+        synth.setvibRate(vibrate);
+        synth.settremDepth(tremdepth);
+        synth.settremRate(tremrate);
+        synth.setResoHP(hpresonance);
+        synth.setCutoffHP(hpcutoff);
+        synth.setPitchWheel(pitchwheel);
+        synth.setLpKeyTracking(lpkeytracking);
+        synth.setHpKeyTracking(hpkeytracking);
+        synth.setVelMode(velmode);
+        synth.setModeObf(obfmode);
+        synth.setKeyTrackingObf(obfkeytracking);
+        synth.setResonanceObf(obfresonance);
+        synth.setCutoffObf(obfcutoff);
+        synth.setOnOffObf(obfonoff);
+        synth.setOnOffLP(lponoff);
+        synth.setOnOffHP(hponoff);
+        synth.setOnOffVib(vibonoff);
+        synth.setOnOffTrem(tremonoff);
+        synth.setChorusOnOff(chorusonoff);
+        synth.setChorusLevel(choruslev);
+        synth.setChorusDelay(chorusdelay);
+        synth.setChorusDepth(chorusdepth);
+        synth.setChorusFreq(chorusfreq);
+        synth.setReverbOnOff(revonoff);
+        synth.setReverbRoomSize(revroomsize);
+        synth.setReverbDamp(revdamp);
+        synth.setReverbMix(revmix);
+        synth.setOnOffWasp(wasponoff);
+        synth.setFilterMixWasp(waspmix);
+        synth.setResonanceWasp(waspresonance);
+        synth.setCutoffWasp(waspcutoff);
+        synth.setKeyTrackingWasp(waspkeytracking);
+    }
+
+#if defined (RUN_AS_PLUGIN)
 
     void startGui(Window window) {
         main_init(&app);
@@ -257,6 +280,7 @@
             param.paramChanged.store(false, std::memory_order_release);
         }
         run_embedded(w_top->app);
+        //updateUI();
     }
 
     Xputty *getMain() {
@@ -284,7 +308,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 11; // guard for future proof
+        header.version = 12; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -342,6 +366,13 @@
         out.write(&revroomsize, sizeof(revroomsize));
         out.write(&revdamp, sizeof(revdamp));
         out.write(&revmix, sizeof(revmix));
+        // since version 12
+        out.write(&wasponoff, sizeof(wasponoff));
+        out.write(&waspmix, sizeof(waspmix));
+        out.write(&waspresonance, sizeof(waspresonance));
+        out.write(&waspcutoff, sizeof(waspcutoff));
+        out.write(&waspkeytracking, sizeof(waspkeytracking));
+
 
 
         writeSamples(out, af.samples, af.samplesize);
@@ -372,7 +403,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 11) {
+        if (header.version > 12) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -441,9 +472,17 @@
             in.read(&revdamp, sizeof(revdamp));
             in.read(&revmix, sizeof(revmix));
         }
+        if (header.version > 11) {
+            in.read(&wasponoff, sizeof(wasponoff));
+            in.read(&waspmix, sizeof(waspmix));
+            in.read(&waspresonance, sizeof(waspresonance));
+            in.read(&waspcutoff, sizeof(waspcutoff));
+            in.read(&waspkeytracking, sizeof(waspkeytracking));
+        }
 
         readSamples(in, af.samples, af.samplesize);
         havePresetToLoad = true;
         return true;
     }
 
+#endif

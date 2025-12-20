@@ -32,6 +32,7 @@ void jack_shutdown (void *arg) {
 }
 
 int jack_xrun_callback(void *arg) {
+    ui.getXrun();
     fprintf (stderr, "Xrun \r");
     return 0;
 }

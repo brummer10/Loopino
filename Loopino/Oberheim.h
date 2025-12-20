@@ -36,14 +36,13 @@ struct SEMFilter {
     float keytrack  = 0.3f;    // 0.0f … 0.6f
     int   midiNote  = 69;      // 0 - 127
     bool onOff      = false;   // off
-    float mode      = 0.0f;    // 0.0f  …  1.0f
+    float mode      = 0.5f;    // 0.0f  …  1.0f
 
     // Internal
     float g = 0.0f;
     float R = 0.0f;
     float lp = 0.0f;
     float bp = 0.0f;
-    float freqComp = 0.0f;
     float fadeGain = 0.0f;
     float fadeStep = 0.0f;
     float fadedStep = 0.0f;
@@ -77,7 +76,6 @@ struct SEMFilter {
         g = 2.0f * sinf(M_PI * cutoffHz / sampleRate);
         g = std::min(g, 0.99f);
         float r = std::clamp(resonance, 0.0f, 1.0f);
-        freqComp = 0.8f + 0.2f * (cutoffHz / 12000.0f);
         R = 0.5f + r * 1.6f;
     }
 
@@ -116,6 +114,8 @@ struct SEMFilter {
             out = bp_norm * (1.0f - t)
                 + hp * t;
         }
+        float freqComp = 0.8f + 0.2f * (cutoff * 0.000083333f);  // 1.0f/12000.0f
+
         out *= (1.0f + 0.5f * resonance) * freqComp;
         return in * (1.0f - fadeGain) + out * fadeGain;
     }

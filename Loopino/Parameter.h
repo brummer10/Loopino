@@ -56,6 +56,14 @@ public:
     }
 
     // register a variable as parameter
+    void registerParam(int id, std::string name, std::string group,
+                    double min, double max, double def, double step,
+                    void* value, bool isStepped, int type) {
+        Parameter p = {id, name, group, min, max, def, step, value, isStepped, type, false};
+        parameter.push_back(p);
+    }
+
+    // register a variable as parameter
     void registerParam(std::string name, std::string group,
                     double min, double max, double def, double step,
                     void* value, bool isStepped, int type) {
@@ -71,6 +79,11 @@ public:
         int id = static_cast<int>(parameter.size());
         Parameter p = {id, name, group, min, max, def, step, value, isStepped, type, false};
         parameter.push_back(p);
+    }
+
+    void sortParameter() {
+        std::sort(parameter.begin(), parameter.end(), 
+          [](const Parameter& a, const Parameter& b){ return a.id < b.id; }); 
     }
 
     // indicate a parameter change by the user
@@ -96,7 +109,7 @@ public:
     }
 
     // reset all parameters to default values
-    void reset() {
+    void resetParams() {
         uint32_t count = parameter.size();
         for (uint32_t i = 0; i < count; i++) {
             const auto& def = parameter[i];

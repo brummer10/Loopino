@@ -24,13 +24,17 @@
 #include <vector>
 #include <atomic>
 
+#include "RtCheck.h"
+
 class AlsaAudioOut {
 public:
     std::atomic<uint32_t> xruns {0};
     AlsaAudioOut(const std::string& device = "default")
         : deviceName(device) {}
 
-    ~AlsaAudioOut() { shutdown(); }
+    ~AlsaAudioOut() { 
+        shutdown();
+        }
 
     void setThreadPolicy(int32_t rt_prio, int32_t rt_policy) noexcept {
         sched_param sch_params;
@@ -84,9 +88,13 @@ public:
         return true;
     }
 
-    bool init(decltype(ui)* ui, uint32_t preferredRate = 48000,
-              uint32_t preferredPeriod = 256, uint32_t preferredPeriods = 3) {
-
+    bool init(decltype(ui)* ui, RtCheck *rtcheck, uint32_t preferredRate = 48000,
+              uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 3) {
+        if (rtcheck->run_check()) {
+            preferredPeriod = preferredPeriod_;
+        } else {
+            preferredPeriod = 1024;
+        }
         uiPtr = ui;
         int err = snd_pcm_open(&pcm, deviceName.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
         if (err < 0) {
@@ -107,7 +115,7 @@ public:
         snd_pcm_uframes_t period = preferredPeriod;
         snd_pcm_hw_params_set_period_size_near(pcm, hw, &period, 0);
 
-        unsigned int periods = preferredPeriods;
+        periods = preferredPeriods;
         snd_pcm_hw_params_set_periods_near(pcm, hw, &periods, 0);
 
         err = snd_pcm_hw_params(pcm, hw);
@@ -148,6 +156,7 @@ public:
         if (n == -EPIPE) {
             xruns.fetch_add(1, std::memory_order_relaxed);
             //std::cout << "Xrun Overrun " << xruns.load(std::memory_order_relaxed) << std::endl;
+            uiPtr->getXrun();
             snd_pcm_prepare(pcm_in);
             uiPtr->record = false;
             rec = false;
@@ -215,6 +224,7 @@ public:
             if (written == -EPIPE) {
                 xruns.fetch_add(1, std::memory_order_relaxed);
                 //std::cout << "Xrun Underrun " << xruns.load(std::memory_order_relaxed) << std::endl;
+                uiPtr->getXrun();
                 snd_pcm_prepare(pcm);
             }
             else if (written == -ESTRPIPE) {
@@ -235,7 +245,7 @@ public:
         running.store(true);
         audioThread = std::thread(&AlsaAudioOut::run, this);
         setThreadPolicy(25, 1);
-        std::cout << "Running ALSA with " << rateHz << " Hz SampleRate and " << framesPerBuffer << " Frames/Periode" << std::endl;
+        std::cout << "Running ALSA at: " << rateHz << " Hz SampleRate with " << framesPerBuffer << "/" << periods << " Frames/Periode" << std::endl;
     }
 
     void stop() {
@@ -270,7 +280,9 @@ private:
 
     uint32_t rateHz = 44100;
     uint32_t framesPerBuffer = 256;
+    uint32_t preferredPeriod = 256;
     uint32_t r = 0;
+    unsigned int periods = 2;
     bool rec = false;
 
     std::vector<int16_t> in_i16;
