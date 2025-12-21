@@ -19,6 +19,7 @@
 #include "Limiter.h"
 #include "Chorus.h"
 #include "Reverb.h"
+#include "DcBlocker.h"
 
 #ifndef SAMPLEPLAYER_H
 #define SAMPLEPLAYER_H
@@ -62,6 +63,8 @@ public:
         release = std::max(r, 0.001f);
         releaseCoef = recalcCoef(release);
     }
+
+    float getEnvelopeLevel() { return level; }
 
     void noteOn() {state = ATTACK;}
 
@@ -664,6 +667,8 @@ public:
         player.setSampleRate(sr);
     }
 
+    float getEnvelopeLevel() { return env.getEnvelopeLevel(); }
+
     void setAttack(float a) {env.setAttack(a);}
     void setDecay(float d) {env.setDecay(d);}
     void setSustain(float s) {env.setSustain(s);}
@@ -941,6 +946,7 @@ public:
         chorus.setSampleRate(sr);
         reverb.setSampleRate(sr);
         lim.setSampleRate(sr);
+        dcblocker.setSampleRate(sr);
         for (auto& v : voices) {
             v->setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
             v->setSampleRate(sr);
@@ -1039,7 +1045,6 @@ public:
         const auto s = playLoop ? loopBank->getSample(sampleIndex) : sampleBank->getSample(sampleIndex);
         if (!s) return;
 
-        // Find free voice
         for (auto& v : voices) {
             if (!v->isActive()) {
                 v->noteOn(midiNote, velocity, s, s->sourceRate, s->rootFreq, playLoop);
@@ -1059,6 +1064,7 @@ public:
         }
 
         fRec0[0] = fSlow0 + 0.999 * fRec0[1];
+        mix = dcblocker.process(mix);
         mix = chorus.process(mix);
         mix = reverb.process(mix);
         mix *= masterGain * fRec0[0];
@@ -1082,6 +1088,7 @@ private:
     Limiter lim;
     Chorus chorus;
     Reverb reverb;
+    DcBlocker dcblocker;
 
     const SampleBank* sampleBank = nullptr;
     const SampleBank* loopBank = nullptr;

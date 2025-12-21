@@ -162,10 +162,8 @@ public:
         timer = 30;
         generateKeys();
         guiIsCreated = false;
-        //#if defined (RUN_AS_PLUGIN)
         registerParameters();
         param.resetParams();
-        //#endif
     };
 
     ~Loopino() {
@@ -483,8 +481,9 @@ public:
         Sharp = add_knob(frame, "Square",15,20,38,38);
         Sharp->scale.gravity = ASPECT;
         Sharp->flags |= HAS_TOOLTIP;
+        Sharp->data = 1;
         add_tooltip(Sharp, "Square");
-        set_adjustment(Sharp->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_adjustment(Sharp->adj, 0.0, 0.0, -1.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
         Sharp->func.expose_callback = draw_knob;
         Sharp->func.value_changed_callback = sharp_callback;
@@ -493,8 +492,9 @@ public:
         Saw = add_knob(frame, "Saw",55,20,38,38);
         Saw->scale.gravity = ASPECT;
         Saw->flags |= HAS_TOOLTIP;
+        Saw->data = 1;
         add_tooltip(Saw, "Saw Tooth");
-        set_adjustment(Saw->adj, 0.0, 0.0, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_adjustment(Saw->adj, 0.0, 0.0, -1.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
         Saw->func.expose_callback = draw_knob;
         Saw->func.value_changed_callback = saw_callback;
@@ -1171,21 +1171,25 @@ private:
         }
     }
 
-
     void process_saw(std::vector<float>& buffer) {
         if (buffer.empty()) return;
-        if (saw <= 0.0001f) return;
+        if (std::abs(saw) <= 0.0001f) return;
+
+        float sawAmount = std::abs(saw);
+        bool reverseSaw = (saw < 0.0f);
 
         const size_t N = buffer.size();
         float* out = buffer.data();
-        const float snapAmount = saw;
-        const float snapTime = 0.003f * snapAmount;
+
+        const float snapTime = 0.003f * sawAmount;
         size_t start = 0;
 
         while (start < N - 1) {
+
             while (start < N - 1 && out[start] == 0.0f)
                 start++;
             if (start >= N - 1) break;
+
             float sgn = (out[start] >= 0.0f ? 1.0f : -1.0f);
             size_t end = start + 1;
 
@@ -1194,44 +1198,55 @@ private:
 
             size_t len = end - start;
             if (len < 3) { start = end; continue; }
-            float mn = out[start];
-            float mx = out[start];
 
+            float mn = out[start], mx = out[start];
             for (size_t i = start; i < end; ++i) {
-                mn = min(mn, out[i]);
-                mx = max(mx, out[i]);
+                mn = std::min<float>(mn, out[i]);
+                mx = std::max<float>(mx, out[i]);
             }
 
-            for (size_t i = 0; i < len; ++i)
-            {
+            // linear ramp (forward / reverse)
+            for (size_t i = 0; i < len; ++i) {
                 float t = float(i) / float(len - 1);
                 float linear;
-                if (sgn > 0.0f) linear = mn + t * (mx - mn);
-                else linear = mx + t * (mn - mx);
 
-                out[start + i] = (1.0f - saw) * out[start + i] + saw * linear;
-            }
-
-            size_t snapSamples = size_t(snapTime * float(len));
-            if (snapSamples < 1) snapSamples = 1;
-            if (snapSamples > len / 3) snapSamples = len / 3;
-            if (snapSamples == 1) {
-                size_t idx = end - 1;
-                float snapTarget = (sgn > 0.0f ? mn : mx);
-                out[idx] = (out[idx] * 0.0f) + snapTarget * 1.0f;
-            } else {
-                float alpha = 0.25f + saw * 0.35f;
-                float beta  = 1.20f + saw * 0.50f;
-
-                for (size_t i = 0; i < snapSamples; ++i) {
-                    float t = float(i) / float(snapSamples - 1);
-                    float snapEnv = std::pow(t, alpha) * std::pow(1.0f - t, beta);
-                    size_t idx = end - 1 - i;
-                    float snapTarget = (sgn > 0.0f ? mn : mx);
-
-                    out[idx] = out[idx] * (1.0f - snapEnv) + snapTarget * snapEnv;
+                if (!reverseSaw) {
+                    if (sgn > 0.0f) linear = mn + t * (mx - mn);
+                    else           linear = mx + t * (mn - mx);
+                } else {
+                    if (sgn > 0.0f) linear = mx - t * (mx - mn);
+                    else           linear = mn - t * (mn - mx);
                 }
+
+                out[start + i] =
+                    (1.0f - sawAmount) * out[start + i] +
+                    sawAmount * linear;
             }
+
+            // snap
+            size_t snapSamples = size_t(snapTime * float(len));
+            snapSamples = std::clamp(snapSamples, size_t(1), len / 3);
+
+            float alpha = 0.25f + sawAmount * 0.35f;
+            float beta  = 1.20f + sawAmount * 0.50f;
+
+            for (size_t i = 0; i < snapSamples; ++i) {
+                float t = float(i) / float(snapSamples - 1);
+                float snapEnv = std::pow(t, alpha) * std::pow(1.0f - t, beta);
+
+                size_t idx = reverseSaw ? (start + i) : (end - 1 - i);
+
+                float snapTarget;
+                if (!reverseSaw)
+                    snapTarget = (sgn > 0.0f ? mn : mx);
+                else
+                    snapTarget = (sgn > 0.0f ? mx : mn);
+
+                out[idx] =
+                    out[idx] * (1.0f - snapEnv) +
+                    snapTarget * snapEnv;
+            }
+
             start = end;
         }
     }
@@ -1488,14 +1503,15 @@ private:
         af.samples = nullptr;
         af.samples =  new float[new_size];
         af.samplesize = new_size;
+        af.samplerate = jack_sr;
         af.channels = 1;
         std::memset(af.samples, 0, new_size * sizeof(float));
         const float duration = new_size / jack_sr / 2;
+        const float f = 440.0f;
         for (int i = 0; i < new_size; ++i) {
             float t = (float)i / jack_sr;
-            float s = sinf(2.0f * M_PI * 440.0f * t);
-            //float phase = fmodf(t * 440.f, 1.0f);  // 0..1
-            //float s = 2.0f * phase - 1.0f;    
+            float s = sinf(2.0f * M_PI * f * t) +
+                        0.02f * sinf(2.0f * M_PI * f * 2.0f * t);
             float fade = 1.0f;
             float fadeStart = duration - 2.0f;
             if (t > fadeStart) {
@@ -2349,9 +2365,20 @@ private:
         cairo_new_sub_path(w->crb);
         //cairo_set_source_rgba(w->crb, 0.75, 0.75, 0.75, 1);
         use_base_color_scheme(w, PRELIGHT_);
-        cairo_arc (w->crb,knobx1+arc_offset, knoby1+arc_offset, radius,
-              add_angle + scale_zero, add_angle + angle);
+        if (! w->data) {
+            cairo_arc (w->crb,knobx1+arc_offset, knoby1+arc_offset, radius,
+                  add_angle + scale_zero, add_angle + angle);
+        } else {
+            const double mid_angle = scale_zero + 0.5 * 2 * (M_PI - scale_zero);
+            if (knobstate < 0.5f)
+                cairo_arc_negative (w->crb, knobx1+arc_offset, knoby1+arc_offset, radius,
+                  add_angle + mid_angle, add_angle + angle);
+            else
+                cairo_arc (w->crb, knobx1+arc_offset, knoby1+arc_offset, radius,
+                  add_angle + mid_angle, add_angle + angle);
+        }
         cairo_stroke(w->crb);
+        cairo_new_sub_path(w->crb);
 
         use_text_color_scheme(w, get_color_state(w));
         cairo_text_extents_t extents;
@@ -2671,6 +2698,9 @@ static void draw_my_vswitch(void *w_, void* user_data) {
     cairo_new_path(wid->crb);
     self->roundrec(wid->crb, x+offset, y+offset, w - (offset * 2), h - (offset * 2), centerW-offset);
     cairo_set_source_rgba(wid->crb, 0.05, 0.05, 0.05, 1);
+    if (wid->state == 1) {
+         pattern_out(wid, PRELIGHT_,  wid->height);
+    }
     cairo_fill_preserve(wid->crb);
 
     cairo_set_source_rgba(wid->crb, 0.05, 0.05, 0.05, 1);
@@ -2866,6 +2896,8 @@ static void draw_my_vswitch(void *w_, void* user_data) {
             Widget_t *w = (Widget_t*)w_;
             Loopino *self = static_cast<Loopino*>(w->parent_struct);
             self->generateSine();
+            self->param.resetParams();
+            self->setValuesFromHost();
         };
         expo->func.button_release_callback = [](void *w_, void*item_, void *user_data) {
             Widget_t *w = (Widget_t*)w_;
@@ -2994,7 +3026,7 @@ static void draw_my_vswitch(void *w_, void* user_data) {
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 12; // guard for future proof
+        header.version = 13; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -3061,6 +3093,8 @@ static void draw_my_vswitch(void *w_, void* user_data) {
 
 
         writeSampleBuffer(out, af.samples, af.samplesize);
+        // since version 13
+        writeValue(out, jack_sr);
         out.close();
         std::string tittle = "loopino: " + presetName;
         widget_set_title(w_top, tittle.data());
@@ -3080,7 +3114,7 @@ static void draw_my_vswitch(void *w_, void* user_data) {
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 11) {
+        if (header.version > 13) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -3170,6 +3204,13 @@ static void draw_my_vswitch(void *w_, void* user_data) {
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);
+        if (header.version > 12) {
+            uint32_t sampleRate = jack_sr;
+            readValue(in, sampleRate);
+            if (sampleRate != jack_sr) {
+                af.checkSampleRate(&af.samplesize, 1, af.samples, sampleRate, jack_sr);
+            }
+        }
         in.close();
         adj_set_max_value(wview->adj, (float)af.samplesize);
         adj_set_state(loopMark_L->adj, 0.0);

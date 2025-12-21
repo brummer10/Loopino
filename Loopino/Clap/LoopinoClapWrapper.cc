@@ -308,7 +308,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 12; // guard for future proof
+        header.version = 13; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -376,6 +376,7 @@
 
 
         writeSamples(out, af.samples, af.samplesize);
+        out.write(&jack_sr, sizeof(jack_sr));
     }
 
     bool readSamples(StreamIn& in, float*& samples, uint32_t& numData) {
@@ -403,7 +404,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 12) {
+        if (header.version > 13) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -481,6 +482,13 @@
         }
 
         readSamples(in, af.samples, af.samplesize);
+        if (header.version > 12) {
+            uint32_t sampleRate = jack_sr;
+            in.read(&sampleRate, sizeof(sampleRate));
+            if (sampleRate != jack_sr) {
+                af.checkSampleRate(&af.samplesize, 1, af.samples, sampleRate, jack_sr);
+            }
+        }
         havePresetToLoad = true;
         return true;
     }

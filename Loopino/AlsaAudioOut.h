@@ -89,7 +89,7 @@ public:
     }
 
     bool init(decltype(ui)* ui, RtCheck *rtcheck, uint32_t preferredRate = 48000,
-              uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 3) {
+              uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 2) {
         if (rtcheck->run_check()) {
             preferredPeriod = preferredPeriod_;
         } else {

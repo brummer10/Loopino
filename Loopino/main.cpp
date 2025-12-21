@@ -94,12 +94,11 @@ int main(int argc, char *argv[]){
         cmd.printUsage(argv[0]);
         return 1;
     }
-
-    mididevice =
-        cmd.opts.midiDevice.value_or("");
-
-    float scaling =
-        cmd.opts.scaling.value_or(1.0f);
+    // cmd options
+    mididevice = cmd.opts.midiDevice.value_or("");
+    float scaling = cmd.opts.scaling.value_or(1.0f);
+    int bufferSize = cmd.opts.bufferSize.value_or(256);
+    int sampleRate = cmd.opts.sampleRate.value_or(48000);
 
     Xputty app;
     RtCheck rtcheck;
@@ -117,7 +116,7 @@ int main(int argc, char *argv[]){
 
     if (!startJack()) {
         rtcheck.start();
-        if (out.init(&ui, &rtcheck)) out.start();
+        if (out.init(&ui, &rtcheck, sampleRate, bufferSize)) out.start();
         if (!mididevice.empty()) {
             if (rawmidi.open(mididevice.data(), &ui)) {
                 rawmidi.start();
