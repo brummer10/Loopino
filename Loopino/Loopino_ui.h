@@ -290,11 +290,12 @@ public:
         loopMark_L->scale.gravity = NONE;
         loopMark_L->parent_struct = (void*)this;
         set_adjustment(loopMark_L->adj_x,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
-        loopMark_L->adj = loopMark_L->adj_x;
+        //loopMark_L->adj_x = loopMark_L->adj_x_x;
         add_tooltip(loopMark_L, "Set left clip point ");
         os_set_window_attrb(loopMark_L);
         loopMark_L->func.expose_callback = draw_slider;
         loopMark_L->func.button_release_callback = slider_l_released;
+        loopMark_L->func.button_press_callback = slider_pressed;
         loopMark_L->func.motion_callback = move_loopMark_L;
         loopMark_L->func.value_changed_callback = slider_l_changed_callback;
 
@@ -302,11 +303,12 @@ public:
         loopMark_R->scale.gravity = NONE;
         loopMark_R->parent_struct = (void*)this;
         set_adjustment(loopMark_R->adj_x,0.0, 0.0, -1000.0, 0.0,1.0, CL_METER);
-        loopMark_R->adj = loopMark_R->adj_x;
+        //loopMark_R->adj_x = loopMark_R->adj_x_x;
         add_tooltip(loopMark_R, "Set right clip point ");
         os_set_window_attrb(loopMark_R);
         loopMark_R->func.expose_callback = draw_slider;
         loopMark_R->func.button_release_callback = slider_r_released;
+        loopMark_R->func.button_press_callback = slider_pressed;
         loopMark_R->func.motion_callback = move_loopMark_R;
         loopMark_R->func.value_changed_callback = slider_r_changed_callback;
 
@@ -681,7 +683,7 @@ public:
             [](Loopino* self, int v) {self->synth.setOnOffObf(v);});
 
         ObfMode = add_knob(frame, "ObfMode",40,20,38,38);
-        set_adjustment(ObfMode->adj, 0.5, 0.5, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_adjustment(ObfMode->adj, 0.2, 0.2, 0.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(ObfMode, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.55, 1.0);
         commonWidgetSettings(ObfMode);
         connectValueChanged(ObfMode, &Loopino::obfmode, 23, "Mode LP <-> BP <-> HP", draw_knob,
@@ -980,6 +982,8 @@ private:
     int velmode;
     int useLoop;
     int xruns;
+    int pressMark = 0;
+    int LMark = 0;
     
     std::vector<float> analyseBuffer;
 
@@ -1427,9 +1431,9 @@ private:
         af.samplesize = new_size / af.channels;
         position = 0;
         adj_set_max_value(wview->adj, (float)af.samplesize);
-        adj_set_state(loopMark_L->adj, 0.0);
+        adj_set_state(loopMark_L->adj_x, 0.0);
         loopPoint_l = 0;
-        adj_set_state(loopMark_R->adj,1.0);
+        adj_set_state(loopMark_R->adj_x,1.0);
         loopPoint_r = af.samplesize;
 
         delete[] af.saveBuffer;
@@ -1480,8 +1484,8 @@ private:
             std::filesystem::path p = file;
             if (guiIsCreated) {
                 adj_set_max_value(wview->adj, (float)af.samplesize);
-                adj_set_state(loopMark_L->adj, 0.0);
-                adj_set_state(loopMark_R->adj,1.0);
+                adj_set_state(loopMark_L->adj_x, 0.0);
+                adj_set_state(loopMark_R->adj_x,1.0);
             }
             loopPoint_l = 0;
             loopPoint_r = af.samplesize;
@@ -1523,8 +1527,8 @@ private:
         loopPoint_l = 0;
         if (guiIsCreated) {
             adj_set_max_value(wview->adj, (float)af.samplesize);
-            adj_set_state(loopMark_L->adj, 0.0);
-            adj_set_state(loopMark_R->adj,1.0);
+            adj_set_state(loopMark_L->adj_x, 0.0);
+            adj_set_state(loopMark_R->adj_x,1.0);
         }
         loopPoint_l = 0;
         loopPoint_r = af.samplesize;
@@ -1560,8 +1564,8 @@ private:
         position = 0;
         if (guiIsCreated) {
             adj_set_max_value(wview->adj, (float)af.samplesize);
-            adj_set_state(loopMark_L->adj, 0.0);
-            adj_set_state(loopMark_R->adj,1.0);
+            adj_set_state(loopMark_L->adj_x, 0.0);
+            adj_set_state(loopMark_R->adj_x,1.0);
         }
         setOneShootToBank();
         if (guiIsCreated) button_setLoop_callback(setLoop, NULL);
@@ -1879,15 +1883,15 @@ private:
     static void slider_l_changed_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        float st = adj_get_state(w->adj);
+        float st = adj_get_state(w->adj_x);
         uint32_t lp = (self->af.samplesize) * st;
         if (lp > self->position) {
             lp = self->position;
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
         st = std::clamp(st, 0.0f, 0.99f);
-        adj_set_state(w->adj, st);
-        if (adj_get_state(self->loopMark_R->adj) < st+0.01)adj_set_state(self->loopMark_R->adj, st+0.01);
+        adj_set_state(w->adj_x, st);
+        if (adj_get_state(self->loopMark_R->adj_x) < st+0.01)adj_set_state(self->loopMark_R->adj_x, st+0.01);
         int width = self->w->width-40;
         os_move_window(self->w->app->dpy, w, 15+ (width * st), 2);
         self->loopPoint_l = lp;
@@ -1900,12 +1904,22 @@ private:
         XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
         if (w->flags & HAS_POINTER) {
             if(xbutton->button == Button4) {
-                adj_set_value(w->adj, adj_get_value(w->adj) + 1.0);
+                adj_set_value(w->adj_x, adj_get_value(w->adj_x) + 1.0);
             } else if(xbutton->button == Button5) {
-                adj_set_value(w->adj, adj_get_value(w->adj) - 1.0);
+                adj_set_value(w->adj_x, adj_get_value(w->adj_x) - 1.0);
             }
         }
         expose_widget(w);
+    }
+
+    static void slider_pressed(void *w_, void* xbutton_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        self->pressMark = xbutton->x_root;
+        self->LMark = metrics.x + metrics.width * 0.5;
     }
 
     // move left loop point following the mouse pointer
@@ -1915,8 +1929,9 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         Metrics_t metrics;
         os_get_window_metrics(w, &metrics);
-        int x2 = metrics.x;
-        x2 += xmotion->x;
+        int x1 = xmotion->x_root - self->pressMark;
+        int x2 = self->LMark;
+        x2 += x1;
         int width = self->w->width-40;
         int pos = max(15, min (width+15,x2-5));
         float st =  (float)( (float)(pos-15.0)/(float)width);
@@ -1928,22 +1943,22 @@ private:
         st = std::clamp(st, 0.0f, 0.99f);
         float st_ = adj_get_state(w->adj);
         st = std::clamp(st, st_ - 0.01f, st_ + 0.01f);
-        adj_set_state(w->adj, st);
+        adj_set_state(w->adj_x, st);
     }
 
     // set right loop point by value changes
     static void slider_r_changed_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        float st = adj_get_state(w->adj);
+        float st = adj_get_state(w->adj_x);
         uint32_t lp = (self->af.samplesize * st);
         if (lp < self->position) {
             self->position = lp;
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
         st = std::clamp(st, 0.01f, 1.0f);
-        adj_set_state(w->adj, st);
-        if (adj_get_state(self->loopMark_L->adj) > st-0.01)adj_set_state(self->loopMark_L->adj, st-0.01);
+        adj_set_state(w->adj_x, st);
+        if (adj_get_state(self->loopMark_L->adj_x) > st-0.01)adj_set_state(self->loopMark_L->adj_x, st-0.01);
         int width = self->w->width-40;
         os_move_window(self->w->app->dpy, w, 15 + (width * st), 2);
         self->loopPoint_r = lp;
@@ -1956,9 +1971,9 @@ private:
         XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
         if (w->flags & HAS_POINTER) {
             if(xbutton->button == Button4) {
-                adj_set_value(w->adj, adj_get_value(w->adj) - 1.0);
+                adj_set_value(w->adj_x, adj_get_value(w->adj_x) - 1.0);
             } else if(xbutton->button == Button5) {
-                adj_set_value(w->adj, adj_get_value(w->adj) + 1.0);
+                adj_set_value(w->adj_x, adj_get_value(w->adj_x) + 1.0);
             }
         }
         expose_widget(w);
@@ -1971,8 +1986,9 @@ private:
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         Metrics_t metrics;
         os_get_window_metrics(w, &metrics);
-        int x2 = metrics.x;
-        x2 += xmotion->x;
+        int x1 = xmotion->x_root - self->pressMark;
+        int x2 = self->LMark;
+        x2 += x1;
         int width = self->w->width-40;
         int pos = max(15, min (width+15,x2-5));
         float st =  (float)( (float)(pos-15.0)/(float)width);
@@ -1982,19 +1998,19 @@ private:
             st = max(0.0, min(1.0, (float)((float)self->position/(float)self->af.samplesize)));
         }
         st = std::clamp(st, 0.01f, 1.0f);
-        float st_ = adj_get_state(w->adj);
+        float st_ = adj_get_state(w->adj_x);
         st = std::clamp(st, st_ - 0.01f, st_ + 0.01f);
-        adj_set_state(w->adj, st);
+        adj_set_state(w->adj_x, st);
     }
 
     // set loop mark positions on window resize
     static void resize_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
-        float st = adj_get_state(self->loopMark_L->adj);
+        float st = adj_get_state(self->loopMark_L->adj_x);
         int width = self->w->width-40;
         os_move_window(w->app->dpy, self->loopMark_L, 15+ (width * st), 2);
-        st = adj_get_state(self->loopMark_R->adj);
+        st = adj_get_state(self->loopMark_R->adj_x);
         os_move_window(w->app->dpy, self->loopMark_R, 15+ (width * st), 2);
     }
 
@@ -2498,12 +2514,12 @@ private:
 
         //int halfWidth = width*0.5;
 
-        double state_l = adj_get_state(self->loopMark_L->adj);
+        double state_l = adj_get_state(self->loopMark_L->adj_x);
         cairo_set_source_rgba(w->crb, 0.25, 0.25, 0.05, 0.666);
         cairo_rectangle(w->crb, 0, 2, (width*state_l), height-4);
         cairo_fill(w->crb);
 
-        double state_r = adj_get_state(self->loopMark_R->adj);
+        double state_r = adj_get_state(self->loopMark_R->adj_x);
         cairo_set_source_rgba(w->crb, 0.25, 0.25, 0.05, 0.666);
         int point = (width*state_r);
         cairo_rectangle(w->crb, point, 2 , width - point, height-4);
@@ -3213,8 +3229,8 @@ static void draw_my_vswitch(void *w_, void* user_data) {
         }
         in.close();
         adj_set_max_value(wview->adj, (float)af.samplesize);
-        adj_set_state(loopMark_L->adj, 0.0);
-        adj_set_state(loopMark_R->adj,1.0);
+        adj_set_state(loopMark_L->adj_x, 0.0);
+        adj_set_state(loopMark_R->adj_x,1.0);
         loadLoopNew = true;
         //loadNew = true;
        // update_waveview(wview, af.samples, af.samplesize);
