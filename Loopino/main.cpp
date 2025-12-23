@@ -23,7 +23,6 @@
 Loopino ui;
 
 #include "CmdParser.h"
-#include "RtCheck.h"
 #include "jack.cc"
 #include "AlsaAudioOut.h"
 #include "AlsaMidiIn.h"
@@ -101,7 +100,6 @@ int main(int argc, char *argv[]){
     int sampleRate = cmd.opts.sampleRate.value_or(48000);
 
     Xputty app;
-    RtCheck rtcheck;
     AlsaAudioOut out;
     std::condition_variable Sync;
 
@@ -115,8 +113,7 @@ int main(int argc, char *argv[]){
     signal (SIGINT, signal_handler);
 
     if (!startJack()) {
-        rtcheck.start();
-        if (out.init(&ui, &rtcheck, sampleRate, bufferSize)) out.start();
+        if (out.init(&ui, sampleRate, bufferSize)) out.start();
         if (!mididevice.empty()) {
             if (rawmidi.open(mididevice.data(), &ui)) {
                 rawmidi.start();
@@ -129,7 +126,6 @@ int main(int argc, char *argv[]){
             devices = rawmidi.listAlsaRawMidiInputs();
             showMidiDeviceSelect();
         }
-        rtcheck.stop();
     }
 
     main_run(&app);

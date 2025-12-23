@@ -64,6 +64,11 @@
         param.registerParam("Wasp Resonance","Wasp",0.0, 1.0, 0.4, 0.01, (void*)&waspresonance,false,  IS_FLOAT);
         param.registerParam("Wasp CutOff","Wasp",40.0, 12000.0, 1000.0, 0.01,(void*)&waspcutoff,false, IS_FLOAT);
         param.registerParam("Wasp Keytracking","Wasp",0.0, 1.0, 0.5, 0.01,(void*)&waspkeytracking,false,IS_FLOAT);
+        param.registerParam("TB On/Off", "TB303",0, 1, 0, 1,              (void*)&tbonoff,       true,  IS_INT);
+        param.registerParam("TB Vintage","TB303",0.0, 1.0, 0.3, 0.01,     (void*)&tbvintage,    false,  IS_FLOAT);
+        param.registerParam("TB Resonance","TB303",0.0, 1.0, 0.75, 0.01,  (void*)&tbresonance,  false,  IS_FLOAT);
+        param.registerParam("TB CutOff","TB303",40.0, 12000.0, 500.0, 0.01,(void*)&tbcutoff,    false,  IS_FLOAT);
+        param.registerParam("Tone",     "Synth", -1.0, 1.0, 0.0, 0.01,    (void*)&tone,         false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -119,6 +124,12 @@
             adj_set_value(WaspResonance->adj, waspresonance);
             adj_set_value(WaspCutOff->adj, waspcutoff);
             wheel_set_value(WaspKeyTracking, (waspkeytracking * 2.0f) - 1.0f);
+
+            adj_set_value(TBOnOff->adj, (float)tbonoff);
+            adj_set_value(TBVintage->adj, tbvintage);
+            adj_set_value(TBResonance->adj, tbresonance);
+            adj_set_value(TBCutOff->adj, tbcutoff);
+            adj_set_value(Tone->adj, tone);
 
             expose_widget(LpKeyTracking);
             expose_widget(HpKeyTracking);
@@ -176,6 +187,11 @@
         synth.setResonanceWasp(waspresonance);
         synth.setCutoffWasp(waspcutoff);
         synth.setKeyTrackingWasp(waspkeytracking);
+        synth.setTBOnOff(tbonoff);
+        synth.setVintageAmountTB(tbvintage);
+        synth.setResonanceTB(tbresonance);
+        synth.setCutoffTB(tbcutoff);
+        synth.setTone(tone);
     }
 
 #if defined (RUN_AS_PLUGIN)
@@ -183,8 +199,8 @@
     void startGui(Window window) {
         main_init(&app);
         set_custom_theme(&app);
-        int w = 880;
-        int h = 490;
+        int w = WINDOW_WIDTH;
+        int h = WINDOW_HEIGHT;
         #if defined(_WIN32)
         w_top  = create_window(&app, (HWND) window, 0, 0, w, h);
         #else
@@ -199,8 +215,8 @@
     void startGui() {
         main_init(&app);
         set_custom_theme(&app);
-        int w = 880;
-        int h = 490;
+        int w = WINDOW_WIDTH;
+        int h = WINDOW_HEIGHT;
         w_top  = create_window(&app, os_get_root_window(&app, IS_WINDOW), 0, 0, w, h);
         w_top->flags |= HIDE_ON_DELETE;
         createGUI(&app);
@@ -308,7 +324,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 13; // guard for future proof
+        header.version = 14; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -372,10 +388,15 @@
         out.write(&waspresonance, sizeof(waspresonance));
         out.write(&waspcutoff, sizeof(waspcutoff));
         out.write(&waspkeytracking, sizeof(waspkeytracking));
-
-
+        // since version 14
+        out.write(&tbonoff, sizeof(tbonoff));
+        out.write(&tbvintage, sizeof(tbvintage));
+        out.write(&tbresonance, sizeof(tbresonance));
+        out.write(&tbcutoff, sizeof(tbcutoff));
+        out.write(&tone, sizeof(tone));
 
         writeSamples(out, af.samples, af.samplesize);
+        // since version 13
         out.write(&jack_sr, sizeof(jack_sr));
     }
 
@@ -404,7 +425,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 13) {
+        if (header.version > 14) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -479,6 +500,13 @@
             in.read(&waspresonance, sizeof(waspresonance));
             in.read(&waspcutoff, sizeof(waspcutoff));
             in.read(&waspkeytracking, sizeof(waspkeytracking));
+        }
+        if (header.version > 13) {
+            in.read(&tbonoff, sizeof(tbonoff));
+            in.read(&tbvintage, sizeof(tbvintage));
+            in.read(&tbresonance, sizeof(tbresonance));
+            in.read(&tbcutoff, sizeof(tbcutoff));
+            in.read(&tone, sizeof(tone));
         }
 
         readSamples(in, af.samples, af.samplesize);

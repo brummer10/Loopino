@@ -48,9 +48,6 @@ struct VstStreamIn : StreamIn {
 
 #define PLUGIN_UID 'LOPI'
 
-#define WINDOW_WIDTH  880
-#define WINDOW_HEIGHT 490
-
 #define FlagsChunks (1 << 5)
 
 /****************************************************************

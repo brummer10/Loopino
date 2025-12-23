@@ -20,6 +20,8 @@
 #include "Chorus.h"
 #include "Reverb.h"
 #include "DcBlocker.h"
+#include "TB303Filter.h"
+#include "Tone.h"
 
 #ifndef SAMPLEPLAYER_H
 #define SAMPLEPLAYER_H
@@ -947,17 +949,29 @@ public:
         reverb.setSampleRate(sr);
         lim.setSampleRate(sr);
         dcblocker.setSampleRate(sr);
+        tbfilter.setSampleRate(sr);
+        tone.setSampleRate(sr);
+
         for (auto& v : voices) {
             v->setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
             v->setSampleRate(sr);
         }
     }
 
-    void setLoop(bool loop) { playLoop = loop;}
+    void setLoop(bool loop) {
+        playLoop = loop;
+        tbfilter.hardReset();
+    }
 
-    void setLoopBank(const SampleBank* lbank) {loopBank = lbank;}
+    void setLoopBank(const SampleBank* lbank) {
+        loopBank = lbank;
+        tbfilter.hardReset();
+    }
 
-    void setBank(const SampleBank* sbank) {sampleBank = sbank;}
+    void setBank(const SampleBank* sbank) {
+        sampleBank = sbank;
+        tbfilter.hardReset();
+    }
 
     void getAnalyseBuffer(float *abuf, int frames) {
         const auto s = loopBank->getSample(0);
@@ -1028,6 +1042,13 @@ public:
     void setReverbOnOff(int v)  { reverb.setOnOff(intToBool(v)); }
     void setReverbRoomSize(float v) { reverb.setRoomSize(0.9f + v * (1.05f - 0.9f)); }
 
+    void setCutoffTB(float v) {tbfilter.setCutoff(v);}
+    void setResonanceTB(float v) {tbfilter.setResonance(v);}
+    void setVintageAmountTB(float v) {tbfilter.setVintageAmount(v);}
+    void setTBOnOff(int v)  { tbfilter.setOnOff(intToBool(v)); }
+
+    void setTone(float v) { tone.setTone(v); }
+
     void noteOff(int midiNote) {
         updateAllVoices(static_cast<void (SampleVoice::*)(int)>(&SampleVoice::noteOff), midiNote);
     }
@@ -1064,9 +1085,11 @@ public:
         }
 
         fRec0[0] = fSlow0 + 0.999 * fRec0[1];
+        mix = tbfilter.process(mix);
         mix = dcblocker.process(mix);
         mix = chorus.process(mix);
         mix = reverb.process(mix);
+        mix = tone.process(mix);
         mix *= masterGain * fRec0[0];
         fRec0[1] = fRec0[0];
 
@@ -1089,6 +1112,8 @@ private:
     Chorus chorus;
     Reverb reverb;
     DcBlocker dcblocker;
+    TB303Filter tbfilter;
+    Baxandall tone;
 
     const SampleBank* sampleBank = nullptr;
     const SampleBank* loopBank = nullptr;

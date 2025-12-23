@@ -88,13 +88,9 @@ public:
         return true;
     }
 
-    bool init(decltype(ui)* ui, RtCheck *rtcheck, uint32_t preferredRate = 48000,
+    bool init(decltype(ui)* ui, uint32_t preferredRate = 48000,
               uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 2) {
-        if (rtcheck->run_check()) {
-            preferredPeriod = preferredPeriod_;
-        } else {
-            preferredPeriod = 1024;
-        }
+        preferredPeriod = preferredPeriod_;
         uiPtr = ui;
         int err = snd_pcm_open(&pcm, deviceName.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
         if (err < 0) {
