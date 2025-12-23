@@ -39,13 +39,14 @@ jobs:
         with:
           submodules: recursive
 
-#      - name: Configure build environment
-#        shell: bash
-#        run: |
-#          set -e
-#          # adjust these flags if you need debug/LTO etc.
-#          # MAKE_EXTRA_ARGS="DEBUG=false HAVE_CAIRO=true WITH_LTO=false"
-#          # echo "MAKE_EXTRA_ARGS=${MAKE_EXTRA_ARGS}" >> $GITHUB_ENV
+      - name: Configure build environment
+        shell: bash
+        run: |
+          set -e
+          # adjust these flags if you need debug/LTO etc.
+          # MAKE_EXTRA_ARGS="DEBUG=false HAVE_CAIRO=true WITH_LTO=false"
+          # echo "MAKE_EXTRA_ARGS=${MAKE_EXTRA_ARGS}" >> $GITHUB_ENV
+          echo "ARTIFACT_BASENAME=${{ github.event.repository.name }}-linux-x86_64-app" >> $GITHUB_ENV
 
       - name: Build
         shell: bash
@@ -62,7 +63,7 @@ jobs:
       - name: Upload built binaries
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.repository }}-linux-x86_64-app
+          name:  ${{ env.ARTIFACT_BASENAME }}
           path: |
             bin/*
 
@@ -71,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          RELEASE_BASENAME="${{ github.repository }}-app-${{ github.ref_name }}-linux-x86_64"
+          RELEASE_BASENAME="${{ github.event.repository.name }}-app-${{ github.ref_name }}-linux-x86_64"
           tar cJf "${RELEASE_BASENAME}.tar.xz" --transform="s,^bin/,${RELEASE_BASENAME}/," bin/*
           echo "RELEASE_FILENAME=${RELEASE_BASENAME}.tar.xz" >> $GITHUB_ENV
 
