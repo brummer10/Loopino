@@ -6,23 +6,23 @@ env:
   PAWPAW_SKIP_LV2: 1
 
 jobs:
-  linux-standalone:
-    strategy:
-      matrix:
-        target: [linux-x86_64]
-    runs-on: ubuntu-22.04
-    permissions:
-        contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: ./.github/actions
-        with:
-          target: ${{ matrix.target }}
-          postfix: -app
-          lto: false
-          pawpaw: true
+#  linux-standalone:
+#    strategy:
+#      matrix:
+#        target: [linux-x86_64]
+#    runs-on: ubuntu-22.04
+#    permissions:
+#        contents: write
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          submodules: recursive
+#      - uses: ./.github/actions
+#        with:
+#          target: ${{ matrix.target }}
+#          postfix: -app
+#          lto: false
+#          pawpaw: true
 
   linux-clap:
     strategy:

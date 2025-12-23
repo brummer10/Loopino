@@ -1,0 +1,83 @@
+name: build-standalone
+
+on:
+  push:
+
+jobs:
+  linux-standalone:
+    name: Linux standalone (ubuntu:20.04 container)
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:20.04
+    permissions:
+      contents: write
+    steps:
+      - name: Prepare container (preseed tzdata + install deps including pkg-config & cairo)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # avoid interactive prompts (tzdata etc.)
+          export DEBIAN_FRONTEND=noninteractive
+          echo "DEBIAN_FRONTEND=${DEBIAN_FRONTEND}" >> $GITHUB_ENV
+
+          # Preseed tzdata (change Area/Zone if you want another timezone)
+          echo "tzdata tzdata/Areas select Europe" | debconf-set-selections
+          echo "tzdata tzdata/Zones/Europe select Berlin" | debconf-set-selections
+
+          apt-get update -qq
+          apt-get install -y --no-install-recommends \
+            git ca-certificates apt-transport-https wget curl build-essential lsb-release \
+            pkg-config libcairo2-dev \
+            libasound2-dev libjack-jackd2-dev libdbus-1-dev libgl1-mesa-dev libglib2.0-dev \
+            liblo-dev libx11-dev libxcursor-dev libxext-dev libxrandr-dev gperf \
+            cmake automake libtool libsndfile1-dev libpulse-dev
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+#      - name: Configure build environment
+#        shell: bash
+#        run: |
+#          set -e
+#          # adjust these flags if you need debug/LTO etc.
+#          # MAKE_EXTRA_ARGS="DEBUG=false HAVE_CAIRO=true WITH_LTO=false"
+#          # echo "MAKE_EXTRA_ARGS=${MAKE_EXTRA_ARGS}" >> $GITHUB_ENV
+
+      - name: Build: main
+        shell: bash
+        run: |
+          set -e
+          make
+
+      - name: List built artifacts
+        shell: bash
+        run: |
+          echo "Contents of bin/ (if present):"
+          ls -la bin || true
+
+      - name: Upload built binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.repository }}-linux-x86_64-app
+          path: |
+            bin/*
+
+      - name: Create release archive (when run on a tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -e
+          RELEASE_BASENAME="${{ github.repository }}-app-${{ github.ref_name }}-linux-x86_64"
+          tar cJf "${RELEASE_BASENAME}.tar.xz" --transform="s,^bin/,${RELEASE_BASENAME}/," bin/*
+          echo "RELEASE_FILENAME=${RELEASE_BASENAME}.tar.xz" >> $GITHUB_ENV
+
+      - name: Upload release archive (tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_FILENAME }}
+          path: ${{ env.RELEASE_FILENAME }}
