@@ -41,10 +41,10 @@
         param.registerParam("Velocity Mode","Synth",  0, 2, 1, 1,         (void*)&velmode,      true,  IS_INT);
 
         //                  name           group   min, max, def, step   value              isStepped  type
-        param.registerParam("Obf Mode",     "OBF", 0.0, 1.0, 0.2, 0.01,   (void*)&obfmode,     false,  IS_FLOAT);
+        param.registerParam("Obf Mode",     "OBF", -1.0, 1.0, -0.6, 0.01, (void*)&obfmode,     false,  IS_FLOAT);
         param.registerParam("Obf Keytracking","OBF",0.0, 1.0, 0.3, 0.01,(void*)&obfkeytracking,false,  IS_FLOAT);
         param.registerParam("Obf Resonance","OBF",0.0, 0.6, 0.3, 0.01,    (void*)&obfresonance,false,  IS_FLOAT);
-        param.registerParam("Obf CutOff",  "OBF",40.0, 12000.6, 1000.0, 0.1,(void*)&obfcutoff, false,  IS_FLOAT);
+        param.registerParam("Obf CutOff",  "OBF",40.0, 12000.6, 200.0, 0.1,(void*)&obfcutoff, false,  IS_FLOAT);
         param.registerParam("Obf On/Off",  "OBF", 0, 1, 0, 1,             (void*)&obfonoff,     true,  IS_INT);
         param.registerParam("LP On/Off" ,   "LP", 0, 1, 0, 1,             (void*)&lponoff,      true,  IS_INT);
         param.registerParam("HP On/Off" ,   "HP", 0, 1, 0, 1,             (void*)&hponoff,      true,  IS_INT);

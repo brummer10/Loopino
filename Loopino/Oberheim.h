@@ -31,12 +31,12 @@ struct SEMFilter {
 
     float sampleRate = 44100.0f;
     // Base params
-    float cutoff    = 1000.0f; // 40.0f  …  12000.0f log
+    float cutoff    = 200.0f; // 40.0f  …  12000.0f log
     float resonance = 0.3f;    // 0.0f  …  0.6f
     float keytrack  = 0.3f;    // 0.0f … 0.6f
     int   midiNote  = 69;      // 0 - 127
     bool onOff      = false;   // off
-    float mode      = 0.5f;    // 0.0f  …  1.0f
+    float mode      = -0.6f;    // -1.0f  …  1.0f
 
     // Internal
     float g = 0.0f;
@@ -105,17 +105,19 @@ struct SEMFilter {
         float bp_norm = saturate(bp * (1.0f + 1.5f * resonance));
 
         float out = 0.0f;
-        if (m < 0.5f) {
-        float t = m * 2.0f;
+        if (m < 0.0f) {
+            float t = m + 1.0f;
             out = lp * (1.0f - t)
                 + bp_norm * t;
         } else {
-            float t = (m - 0.5f) * 2.0f;
+            float t = m;
             out = bp_norm * (1.0f - t)
                 + hp * t;
         }
-        float freqComp = 0.8f + 0.2f * (cutoff * 0.000083333f);  // 1.0f/12000.0f
+        if (fabsf(m) < 0.001f)
+            out *= 1.1f;
 
+        float freqComp = 0.8f + 0.2f * (cutoff * 0.000083333f);  // 1.0f/12000.0f
         out *= (1.0f + 0.5f * resonance) * freqComp;
         return in * (1.0f - fadeGain) + out * fadeGain;
     }

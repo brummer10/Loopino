@@ -27,9 +27,13 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 - Export processed samples/loops as WAV in selected key
 - LP/HP ladder filter with resonance & cutoff
 - Oberheim Filter
+- Wasp Filter
+- TB-303 Filter
 - Phase modulators: sine, triangle, noise & Juno-style
+- Velocity curve support: Soft, Piano, Punch
 - Vibrato & tremolo
-- Chorus & Reverb 
+- Chorus & Reverb
+- Volume & Tone control
 - Pitch Wheel support
 - MIDI PC support
 - Root frequency control

@@ -334,7 +334,7 @@ public:
         loopview->adj_x = add_adjustment(loopview,0.0, 0.0, 0.0, 1000.0,1.0, CL_METER);
         loopview->adj = loopview->adj_x;
         loopview->func.expose_callback = draw_lwview;
-        loopview->func.button_release_callback = set_playhead;
+        //loopview->func.button_release_callback = set_playhead;
         commonWidgetSettings(loopview);
 
         Controls = create_widget(app, w_top, 0, 140, WINDOW_WIDTH, 270);
@@ -628,6 +628,7 @@ public:
 
         WaspMix = add_knob(frame, "WaspMix",40,20,38,38);
         set_adjustment(WaspMix->adj, 0.0, 0.0, -1.0, 1.0, 0.01, CL_CONTINUOS);
+        WaspMix->data = 1;
         set_widget_color(WaspMix, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.55, 1.0);
         commonWidgetSettings(WaspMix);
         connectValueChanged(WaspMix, &Loopino::waspmix, 42, "Mix", draw_knob,
@@ -734,7 +735,8 @@ public:
             [](Loopino* self, int v) {self->synth.setOnOffObf(v);});
 
         ObfMode = add_knob(frame, "ObfMode",40,20,38,38);
-        set_adjustment(ObfMode->adj, 0.2, 0.2, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_adjustment(ObfMode->adj, -0.6, -0.6, -1.0, 1.0, 0.01, CL_CONTINUOS);
+        ObfMode->data = 1;
         set_widget_color(ObfMode, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.55, 1.0);
         commonWidgetSettings(ObfMode);
         connectValueChanged(ObfMode, &Loopino::obfmode, 23, "Mode LP <-> BP <-> HP", draw_knob,
@@ -748,7 +750,7 @@ public:
             [](Loopino* self, float v) {self->synth.setResonanceObf(v);});
 
         ObfCutOff = add_knob(frame, "ObfCutOff",120,20,38,38);
-        set_adjustment(ObfCutOff->adj, 1000.0, 1000.0, 40.0, 12000.0, 0.1, CL_LOGARITHMIC);
+        set_adjustment(ObfCutOff->adj, 200.0, 200.0, 40.0, 12000.0, 0.1, CL_LOGARITHMIC);
         set_widget_color(ObfCutOff, (Color_state)1, (Color_mod)2, 0.20, 0.60, 0.95, 1.0);
         commonWidgetSettings(ObfCutOff);
         connectValueChanged(ObfCutOff, &Loopino::obfcutoff, 26, "CutOff", draw_knob,
@@ -1321,7 +1323,7 @@ private:
             float x = loopBuffer.data()[i];
             float shaped = std::tanh(x * drive);
 
-            loopBuffer.data()[i] = (x + sharp * (shaped - x)) * compensation;
+            loopBuffer[i] = (x + sharp * (shaped - x)) * compensation;
         }
         process_saw(loopBuffer);
     }
