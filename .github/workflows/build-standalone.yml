@@ -47,7 +47,7 @@ jobs:
 #          # MAKE_EXTRA_ARGS="DEBUG=false HAVE_CAIRO=true WITH_LTO=false"
 #          # echo "MAKE_EXTRA_ARGS=${MAKE_EXTRA_ARGS}" >> $GITHUB_ENV
 
-      - name: Build: main
+      - name: Build
         shell: bash
         run: |
           set -e
