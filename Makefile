@@ -40,7 +40,9 @@ endif
 endif
 
 rubberband:
+ifeq (,$(filter $(PASS),$(MAKECMDGOALS)))
 	@exec $(MAKE) --no-print-directory -j 1 -f Makefile.rubberband $(MAKECMDGOALS)
+endif
 
 $(SUBDIR): libxputty rubberband
 ifeq (,$(filter $(PASS),$(MAKECMDGOALS)))

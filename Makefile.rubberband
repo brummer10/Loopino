@@ -28,6 +28,7 @@ static:		lib $(STATIC_TARGET)
 clap:		lib $(STATIC_TARGET)
 vst2:		lib $(STATIC_TARGET)
 debug:		lib $(STATIC_TARGET)
+features:
 
 PUBLIC_INCLUDES := \
 	rubberband/rubberband/rubberband-c.h \
