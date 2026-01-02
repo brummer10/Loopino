@@ -445,7 +445,7 @@
 
         out.write(&mrgonoff, sizeof(mrgonoff));
         out.write(&mrgdrive, sizeof(mrgdrive));
-        sout.write(&mrgamount, sizeof(mrgamount));
+        out.write(&mrgamount, sizeof(mrgamount));
         out.write(&emu_12onoff, sizeof(emu_12onoff));
         out.write(&emu_12drive, sizeof(emu_12drive));
         out.write(&emu_12amount, sizeof(emu_12amount));
@@ -574,7 +574,7 @@
 
             in.read(&mrgonoff, sizeof(mrgonoff));
             in.read(&mrgdrive, sizeof(mrgdrive));
-            sin.read(&mrgamount, sizeof(mrgamount));
+            in.read(&mrgamount, sizeof(mrgamount));
             in.read(&emu_12onoff, sizeof(emu_12onoff));
             in.read(&emu_12drive, sizeof(emu_12drive));
             in.read(&emu_12amount, sizeof(emu_12amount));
