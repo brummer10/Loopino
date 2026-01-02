@@ -2510,19 +2510,22 @@ private:
 
         cairo_text_extents_t extents;
         //use_text_color_scheme(w, get_color_state(w));
-        cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
         cairo_set_font_size (w->crb, w->app->normal_font/w->scale.ascale);
         cairo_text_extents(w->crb,"Abc" , &extents);
-        cairo_move_to (w->crb, 17, extents.height);
-        cairo_show_text(w->crb, w->label);
-        cairo_new_path (w->crb);
+        int pt = extents.height;
 
         cairo_text_extents(w->crb,w->label , &extents);
         cairo_set_line_width(w->crb,2);
-        setFrameColour(w, 5, 5, width_t-10, height_t-10);
-        //cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
+        cairo_set_source_rgba(w->crb, 0.12, 0.12, 0.12, 1);
         rounded_frame(w->crb, 5, 5, width_t-10, height_t-8, extents.width+7);
+        cairo_fill_preserve(w->crb);
+        setFrameColour(w, 5, 5, width_t-10, height_t-10);
         cairo_stroke(w->crb);
+        cairo_new_path (w->crb);
+        cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 1);
+        cairo_move_to (w->crb, 17, pt);
+        cairo_show_text(w->crb, w->label);
+        cairo_new_path (w->crb);
     }
 
     static void draw_slider(void *w_, void* user_data) {
