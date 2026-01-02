@@ -1,6 +1,6 @@
 
 /*
- * TB303Filter.h
+ * LM_ACD18Filter.h
  *
  * SPDX-License-Identifier:  BSD-3-Clause
  *
@@ -9,7 +9,7 @@
 
 
 /****************************************************************
-        TB303Filter.h simulate the tb303 filter
+        LM_ACD18Filter.h simulate the tb303 filter
         
 ****************************************************************/
 
@@ -18,7 +18,7 @@
 #include <cmath>
 #include <algorithm>
 
-class TB303Filter {
+class LM_ACD18Filter {
 public:
     void setSampleRate(float sr) {
         sampleRate = sr;

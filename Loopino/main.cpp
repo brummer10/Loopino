@@ -123,6 +123,7 @@ int main(int argc, char *argv[]){
                     XSetTransientForHint(ui.w_top->app->dpy, dia->widget, ui.w_top->widget);
             }
         } else {
+            devices.reserve(4);
             devices = rawmidi.listAlsaRawMidiInputs();
             showMidiDeviceSelect();
         }

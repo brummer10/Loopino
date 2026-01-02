@@ -26,7 +26,7 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 - Preset save/load system
 - Export processed samples/loops as WAV in selected key
 - LP/HP ladder filter with resonance & cutoff
-- Oberheim Filter
+- SEM12 Filter
 - Wasp Filter
 - TB-303 Filter
 - Phase modulators: sine, triangle, noise & Juno-style

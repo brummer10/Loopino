@@ -1,6 +1,6 @@
 
 /*
- * SoundEdit.h
+ * Loopino.h
  *
  * SPDX-License-Identifier:  BSD-3-Clause
  *
@@ -27,6 +27,7 @@
 #include "AudioFile.h"
 #include "PitchTracker.h"
 #include "LoopGenerator.h"
+#include "Smoother.h"
 #include "SamplePlayer.h"
 #include "Parameter.h"
 
@@ -41,7 +42,6 @@
 #ifndef LOOPINO_H
 #define LOOPINO_H
 
-#if defined (RUN_AS_PLUGIN)
 struct StreamOut {
     virtual void write(const void* data, size_t size) = 0;
     virtual ~StreamOut() = default;
@@ -51,13 +51,12 @@ struct StreamIn {
     virtual void read(void* data, size_t size) = 0;
     virtual ~StreamIn() = default;
 };
-#endif
 
-#define MAX_FLOAT_BINDINGS  50
+#define MAX_FLOAT_BINDINGS  70
 #define MAX_INT_BINDINGS    25
 
 #define WINDOW_WIDTH  966
-#define WINDOW_HEIGHT 490
+#define WINDOW_HEIGHT 570
 
 using ExposeFunc = void (*)(void* w_, void* user_data);
 
@@ -88,9 +87,9 @@ public:
     Params param;
 
     SampleBank sbank;
-    std::shared_ptr<SampleInfo> sampleData { nullptr };;
+    std::shared_ptr<SampleInfo> sampleData { nullptr };
     SampleBank lbank;
-    std::shared_ptr<SampleInfo> loopData { nullptr };;
+    std::shared_ptr<SampleInfo> loopData { nullptr };
 
     uint32_t jack_sr;
     uint32_t position;
@@ -171,6 +170,10 @@ public:
 
     ~Loopino() {
         pa.stop();
+        #if defined(DEBUG)
+        //fftwf_cleanup();
+        //cairo_debug_reset_static_data();
+        #endif
     };
 
 
@@ -336,8 +339,8 @@ public:
         loopview->func.expose_callback = draw_lwview;
         //loopview->func.button_release_callback = set_playhead;
         commonWidgetSettings(loopview);
-
-        Controls = create_widget(app, w_top, 0, 140, WINDOW_WIDTH, 270);
+        // Controls Window takes all space between wave view and keyboard
+        Controls = create_widget(app, w_top, 0, 140, WINDOW_WIDTH, WINDOW_HEIGHT - 140 - 80);
         Controls->parent = w_top;
         Controls->scale.gravity = WESTEAST;
         Controls->func.expose_callback = draw_window_box;
@@ -498,6 +501,7 @@ public:
         set_adjustment(Sharp->adj, 0.0, 0.0, -1.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Sharp, (Color_state)1, (Color_mod)2, 0.55, 0.42, 0.15, 1.0);
         Sharp->func.expose_callback = draw_knob;
+        Sharp->func.button_release_callback = sharp_released;
         Sharp->func.value_changed_callback = sharp_callback;
         commonWidgetSettings(Sharp);
 
@@ -509,6 +513,7 @@ public:
         set_adjustment(Saw->adj, 0.0, 0.0, -1.0, 1.0, 0.01, CL_CONTINUOS);
         set_widget_color(Saw, (Color_state)1, (Color_mod)2, 0.55, 0.52, 0.15, 1.0);
         Saw->func.expose_callback = draw_knob;
+        Saw->func.button_release_callback = sharp_released;
         Saw->func.value_changed_callback = saw_callback;
         commonWidgetSettings(Saw);
 
@@ -524,7 +529,6 @@ public:
         commonWidgetSettings(Tone);
         connectValueChanged(Tone, &Loopino::tone, 0, "Tone", draw_knob,
             [](Loopino* self, float v) {self->synth.setTone(v);});
-
 
         frame = add_frame(Controls, "Gain", 824, 10, 65, 75);
         frame->scale.gravity = ASPECT;
@@ -555,7 +559,19 @@ public:
         w_quit->func.value_changed_callback = button_quit_callback;
         commonWidgetSettings(w_quit);
         #endif
+        /*
+        frame = add_frame(Controls, "Age", 808+86, 10, 62, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
 
+        Age = add_knob(frame, "Age",12,20,38,38);
+        set_adjustment(Age->adj, 0.25, 0.25, 0.00, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Age, (Color_state)1, (Color_mod)2, 0.894, 0.106, 0.623, 1.0);
+        commonWidgetSettings(Age);
+        connectValueChanged(Age, &Loopino::age, 50, "Vintage Age", draw_knob,
+            [](Loopino* self, float v) {self->synth.setAge(v);});
+        */
         frame = add_frame(Controls, "ADSR", 10, 95, 178, 75);
         frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
@@ -724,7 +740,7 @@ public:
         HpKeyTracking->func.value_changed_callback = hpkeytracking_callback;
         commonWidgetSettings(HpKeyTracking);
 
-        frame = add_frame(Controls, "Oberheim Filter", 686+86, 95, 184, 75);
+        frame = add_frame(Controls, "SEM12 Filter", 686+86, 95, 184, 75);
         frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -776,7 +792,7 @@ public:
         connectValueChanged(Frequency, &Loopino::frequency, 4, "Synth Root Frequency", nullptr,
             [](Loopino* self, float v) {self->synth.setRootFreq(v);});
 
-        frame = add_frame(Controls, "TB303 Filter", 106, 180, 170, 75);
+        frame = add_frame(Controls, "Acid-18 Filter", 106, 180, 170, 75);
         frame->scale.gravity = ASPECT;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -932,7 +948,137 @@ public:
         commonWidgetSettings(PitchWheel);
         PitchWheel->func.value_changed_callback = wheel_callback;
 
-        keyboard = add_midi_keyboard(w_top, "Organ", 0, 410, WINDOW_WIDTH, 80);
+        frame = add_frame(Controls, "8-bit Machine",10, 265, 130, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        LM_MIR8OnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(LM_MIR8OnOff);
+        connectValueChanged(LM_MIR8OnOff, &Loopino::mrgonoff, 50, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setLM_MIR8OnOff(v);});
+
+        LM_MIR8Drive = add_knob(frame, "LM_MIR8 Drive",40,20,38,38);
+        set_adjustment(LM_MIR8Drive->adj, 1.3, 1.3, 0.25, 1.5, 0.01, CL_CONTINUOS);
+        set_widget_color(LM_MIR8Drive, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(LM_MIR8Drive);
+        LM_MIR8Drive->func.button_release_callback = machine_released;
+        connectValueChanged(LM_MIR8Drive, &Loopino::mrgdrive, 51, "Drive", draw_knob,
+            [](Loopino* self, float v) {self->synth.setLM_MIR8Drive(v);});
+
+        LM_MIR8Amount = add_knob(frame, "LM_MIR8 Amount",80,20,38,38);
+        set_adjustment(LM_MIR8Amount->adj, 0.25, 0.25, 0.1, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(LM_MIR8Amount, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(LM_MIR8Amount);
+        LM_MIR8Amount->func.button_release_callback = machine_released;
+        connectValueChanged(LM_MIR8Amount, &Loopino::mrgamount, 52, "Amount", draw_knob,
+            [](Loopino* self, float v) {self->synth.setLM_MIR8Amount(v);});
+
+        frame = add_frame(Controls, "12-bit Machine",145, 265, 130, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Emu_12OnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(Emu_12OnOff);
+        connectValueChanged(Emu_12OnOff, &Loopino::emu_12onoff, 53, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setEmu_12OnOff(v);});
+
+        Emu_12Drive = add_knob(frame, "Emu_12 Drive",40,20,38,38);
+        set_adjustment(Emu_12Drive->adj, 1.2, 1.2, 0.25, 2.5, 0.01, CL_CONTINUOS);
+        set_widget_color(Emu_12Drive, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(Emu_12Drive);
+        Emu_12Drive->func.button_release_callback = machine_released;
+        connectValueChanged(Emu_12Drive, &Loopino::emu_12drive, 54, "Drive", draw_knob,
+            [](Loopino* self, float v) {self->synth.setEmu_12Drive(v);});
+
+        Emu_12Amount = add_knob(frame, "Emu_12 Amount",80,20,38,38);
+        set_adjustment(Emu_12Amount->adj, 1.0, 1.0, 0.1, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Emu_12Amount, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(Emu_12Amount);
+        Emu_12Amount->func.button_release_callback = machine_released;
+        connectValueChanged(Emu_12Amount, &Loopino::emu_12amount, 55, "Amount", draw_knob,
+            [](Loopino* self, float v) {self->synth.setEmu_12Amount(v);});
+
+        frame = add_frame(Controls, "Pump Machine",280, 265, 130, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        LM_CMP12OnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(LM_CMP12OnOff);
+        connectValueChanged(LM_CMP12OnOff, &Loopino::cmp12onoff, 56, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setLM_CMP12OnOff(v);});
+
+        LM_CMP12Drive = add_knob(frame, "LM_CMP12 Drive",40,20,38,38);
+        set_adjustment(LM_CMP12Drive->adj, 1.0, 1.0, 0.25, 2.5, 0.01, CL_CONTINUOS);
+        set_widget_color(LM_CMP12Drive, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(LM_CMP12Drive);
+        LM_CMP12Drive->func.button_release_callback = machine_released;
+        connectValueChanged(LM_CMP12Drive, &Loopino::cmp12drive, 57, "Drive", draw_knob,
+            [](Loopino* self, float v) {self->synth.setLM_CMP12Drive(v);});
+
+        LM_CMP12Ratio = add_knob(frame, "LM_CMP12 Ratio",80,20,38,38);
+        set_adjustment(LM_CMP12Ratio->adj, 1.65, 1.65, 0.1, 4.0, 0.01, CL_CONTINUOS);
+        set_widget_color(LM_CMP12Ratio, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(LM_CMP12Ratio);
+        LM_CMP12Ratio->func.button_release_callback = machine_released;
+        connectValueChanged(LM_CMP12Ratio, &Loopino::cmp12ratio, 58, "Ratio", draw_knob,
+            [](Loopino* self, float v) {self->synth.setLM_CMP12Ratio(v);});
+
+        frame = add_frame(Controls, "Studio-16 Machine",415, 265, 165, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        Studio_16OnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(Studio_16OnOff);
+        connectValueChanged(Studio_16OnOff, &Loopino::studio16onoff, 59, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setStudio_16OnOff(v);});
+
+        Studio_16Drive = add_knob(frame, "Studio_16 Drive",40,20,38,38);
+        set_adjustment(Studio_16Drive->adj, 1.1, 1.1, 0.25, 1.5, 0.01, CL_CONTINUOS);
+        set_widget_color(Studio_16Drive, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(Studio_16Drive);
+        Studio_16Drive->func.button_release_callback = machine_released;
+        connectValueChanged(Studio_16Drive, &Loopino::studio16drive, 60, "Drive", draw_knob,
+            [](Loopino* self, float v) {self->synth.setStudio_16Drive(v);});
+
+        Studio_16Warmth = add_knob(frame, "Studio_16 Warmth",80,20,38,38);
+        set_adjustment(Studio_16Warmth->adj, 0.65, 0.65, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Studio_16Warmth, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(Studio_16Warmth);
+        Studio_16Warmth->func.button_release_callback = machine_released;
+        connectValueChanged(Studio_16Warmth, &Loopino::studio16warmth, 61, "Warmth", draw_knob,
+            [](Loopino* self, float v) {self->synth.setStudio_16Warmth(v);});
+
+        Studio_16HfTilt = add_knob(frame, "Studio_16 HfTilt",120,20,38,38);
+        set_adjustment(Studio_16HfTilt->adj, 0.45, 0.45, 0.0, 1.0, 0.01, CL_CONTINUOS);
+        set_widget_color(Studio_16HfTilt, (Color_state)1, (Color_mod)2, 0.44, 0.78, 0.59, 1.0);
+        commonWidgetSettings(Studio_16HfTilt);
+        Studio_16HfTilt->func.button_release_callback = machine_released;
+        connectValueChanged(Studio_16HfTilt, &Loopino::studio16hftilt, 62, "HfTilt", draw_knob,
+            [](Loopino* self, float v) {self->synth.setStudio_16HfTilt(v);});
+
+        frame = add_frame(Controls, "Smooth",585, 265, 85, 75);
+        frame->scale.gravity = ASPECT;
+        frame->func.expose_callback = draw_frame;
+        commonWidgetSettings(frame);
+
+        EPSOnOff = add_toggle_button(frame, "Off",10,10,25,58);
+        commonWidgetSettings(EPSOnOff);
+        connectValueChanged(EPSOnOff, &Loopino::epsonoff, 63, nullptr, draw_my_vswitch,
+            [](Loopino* self, int v) {self->synth.setVFX_EPSOnOff(v);});
+
+        EPSDrive = add_knob(frame, "EPS Drive",40,20,38,38);
+        set_adjustment(EPSDrive->adj, 1.0, 1.0, 0.25, 1.5, 0.01, CL_CONTINUOS);
+        set_widget_color(EPSDrive, (Color_state)1, (Color_mod)2, 0.59, 0.78, 1.0, 1.0);
+        commonWidgetSettings(EPSDrive);
+        EPSDrive->func.button_release_callback = machine_released;
+        connectValueChanged(EPSDrive, &Loopino::epsdrive, 64, "Drive", draw_knob,
+            [](Loopino* self, float v) {self->synth.setVFX_EPSDrive(v);});
+
+        keyboard = add_midi_keyboard(w_top, "Organ", 0, WINDOW_HEIGHT - 80, WINDOW_WIDTH, 80);
         keyboard->flags |= HIDE_ON_DELETE;
         keyboard->parent_struct = (void*)this;
         MidiKeyboard* keys = (MidiKeyboard*)keyboard->private_struct;
@@ -965,7 +1111,7 @@ private:
     Widget_t *loopMark_L, *loopMark_R, *setLoop, *setLoopSize,
              *setNextLoop, *setPrevLoop;
     Widget_t *playbutton;
-    Widget_t *Volume, *Tone;
+    Widget_t *Volume, *Tone, *Age;
     Widget_t *clip;
     Widget_t *Presets;
     Widget_t *Record;
@@ -985,12 +1131,18 @@ private:
     Widget_t *RevRoomSize, *RevDamp, *RevMix, *RevOnOff, *WaspOnOff;
     Widget_t *WaspCutOff, *WaspResonance, *WaspKeyTracking, *WaspMix;
     Widget_t *TBCutOff, *TBResonance, *TBVintage, *TBOnOff;
+    Widget_t *LM_MIR8OnOff, *LM_MIR8Drive, *LM_MIR8Amount;
+    Widget_t *Emu_12OnOff, *Emu_12Drive, *Emu_12Amount;
+    Widget_t *LM_CMP12OnOff, *LM_CMP12Drive, *LM_CMP12Ratio;
+    Widget_t *Studio_16OnOff, *Studio_16Drive, *Studio_16Warmth, *Studio_16HfTilt;
+    Widget_t *EPSOnOff, *EPSDrive;
 
     Window    p;
 
     SupportedFormats supportedFormats;
     PitchTracker pt;
     LoopGenerator lg;
+    Smoother smooth;
 
     std::vector<float> loopBuffer;
     std::vector<float> loopBufferSave;
@@ -1016,7 +1168,7 @@ private:
     int currentPresetNum;
     
     float attack, decay, sustain, release;
-    float frequency, tone;
+    float frequency, tone, age;
     float resonance, cutoff, lpkeytracking;
     float hpresonance, hpcutoff, hpkeytracking;
     float sharp, saw;
@@ -1030,7 +1182,13 @@ private:
     float revroomsize, revdamp, revmix;
     float waspcutoff, waspresonance, waspkeytracking, waspmix;
     float tbcutoff, tbresonance, tbvintage;
-    int vibonoff, tremonoff, lponoff, hponoff, obfonoff, chorusonoff, revonoff, wasponoff, tbonoff;
+    float mrgdrive, mrgamount;
+    float emu_12drive, emu_12amount;
+    float cmp12drive, cmp12ratio;
+    float studio16drive, studio16warmth, studio16hftilt;
+    float epsdrive;
+    int vibonoff, tremonoff, lponoff, hponoff, obfonoff, chorusonoff, revonoff,
+        wasponoff, tbonoff, mrgonoff, emu_12onoff, cmp12onoff, studio16onoff, epsonoff;
     int pmmode;
     int velmode;
     int useLoop;
@@ -1326,6 +1484,11 @@ private:
             loopBuffer[i] = (x + sharp * (shaped - x)) * compensation;
         }
         process_saw(loopBuffer);
+        normalize(loopBuffer, 0.6f);
+        if (guiIsCreated) {
+            loadLoopNew = true;
+            update_waveview(loopview, loopBuffer.data(), loopBuffer.size());
+        }
     }
 
     void process_sample_sharp() {
@@ -1373,22 +1536,30 @@ private:
 
     void setOneShootToBank() {
         if (!af.samples) return;
+        
         sampleBuffer.clear();
         sampleBuffer.resize(af.samplesize);
+        smooth.setSampleRate((float)jack_sr);
+        smooth.reset();
+        smooth.cutoff = std::clamp(freq * 2.4f, 600.0f, 3000.0f);
         float maxAbs = 0.0f;
         for (size_t i = 0; i < af.samplesize; i++) {
-            float a = std::fabs(af.samples[i * af.channels]);
+            sampleBuffer[i] = smooth.process(af.samples[i * af.channels] ) * 0.92f;
+            float a = std::fabs(sampleBuffer[i]);
             if (a > maxAbs) maxAbs = a;
         }
-        float gain = 1.0f/maxAbs;
+
+        float gain = 0.6f/maxAbs;
         for (size_t i = 0; i < af.samplesize; i++) {
-            sampleBuffer[i] = af.samples[i * af.channels] * gain;
+            sampleBuffer[i] *= gain;
         }
+
         sampleBufferSave.clear();
         sampleBufferSave.resize(sampleBuffer.size());
         for (size_t i = 0; i < sampleBuffer.size(); ++i) {
             sampleBufferSave[i] = sampleBuffer[i];
         }
+
         process_sample_sharp();
         setOneShootBank();
     }
@@ -1448,12 +1619,7 @@ private:
 
     void setLoopToBank() {
         if (!loopBuffer.size()) return;
-        normalize(loopBuffer, 0.6f);
-        loadLoopNew = true;
         play_loop = true;
-        if (guiIsCreated) {
-            update_waveview(loopview, loopBuffer.data(), loopBuffer.size());
-        }
         setLoopBank();
     }
 
@@ -2205,6 +2371,13 @@ private:
         self->synth.setGain(self->gain);
     }
 
+    static void sharp_released(void *w_, void* xbutton_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->setOneShootBank();
+        self->setLoopToBank();
+
+    }
     // sharp control
     static void sharp_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
@@ -2213,8 +2386,6 @@ private:
         self->markDirty(10);
         self->process_sharp();
         self->process_sample_sharp();
-        self->setOneShootBank();
-        self->setLoopToBank();
     }
 
     // saw control
@@ -2225,8 +2396,6 @@ private:
         self->markDirty(11);
         self->process_sharp();
         self->process_sample_sharp();
-        self->setOneShootBank();
-        self->setLoopToBank();
     }
 
     // fade control
@@ -2237,6 +2406,13 @@ private:
         self->markDirty(12);
         self->process_sample_sharp();
         self->setOneShootBank();
+    }
+
+    static void machine_released(void *w_, void* xbutton_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->synth.rebuildKeyCache();
+
     }
 
 /****************************************************************
@@ -3007,7 +3183,7 @@ static void draw_my_vswitch(void *w_, void* user_data) {
        }
         std::filesystem::path p = std::filesystem::path(presetFile).parent_path().u8string();
         if (!std::filesystem::exists(p)) {
-            std::filesystem::create_directory(p);
+            std::filesystem::create_directories(p);
         }
     }
 
@@ -3166,6 +3342,22 @@ static void draw_my_vswitch(void *w_, void* user_data) {
         writeControllerValue(out, TBCutOff);
         writeControllerValue(out, Tone);
 
+        writeControllerValue(out, LM_MIR8OnOff);
+        writeControllerValue(out, LM_MIR8Drive);
+        writeControllerValue(out, LM_MIR8Amount);
+        writeControllerValue(out, Emu_12OnOff);
+        writeControllerValue(out, Emu_12Drive);
+        writeControllerValue(out, Emu_12Amount);
+        writeControllerValue(out, LM_CMP12OnOff);
+        writeControllerValue(out, LM_CMP12Drive);
+        writeControllerValue(out, LM_CMP12Ratio);
+        writeControllerValue(out, Studio_16OnOff);
+        writeControllerValue(out, Studio_16Drive);
+        writeControllerValue(out, Studio_16Warmth);
+        writeControllerValue(out, Studio_16HfTilt);
+        writeControllerValue(out, EPSOnOff);
+        writeControllerValue(out, EPSDrive);
+
         writeSampleBuffer(out, af.samples, af.samplesize);
         // since version 13
         writeValue(out, jack_sr);
@@ -3282,6 +3474,22 @@ static void draw_my_vswitch(void *w_, void* user_data) {
             readControllerValue(in, TBResonance);
             readControllerValue(in, TBCutOff);
             readControllerValue(in, Tone);
+
+            readControllerValue(in, LM_MIR8OnOff);
+            readControllerValue(in, LM_MIR8Drive);
+            readControllerValue(in, LM_MIR8Amount);
+            readControllerValue(in, Emu_12OnOff);
+            readControllerValue(in, Emu_12Drive);
+            readControllerValue(in, Emu_12Amount);
+            readControllerValue(in, LM_CMP12OnOff);
+            readControllerValue(in, LM_CMP12Drive);
+            readControllerValue(in, LM_CMP12Ratio);
+            readControllerValue(in, Studio_16OnOff);
+            readControllerValue(in, Studio_16Drive);
+            readControllerValue(in, Studio_16Warmth);
+            readControllerValue(in, Studio_16HfTilt);
+            readControllerValue(in, EPSOnOff);
+            readControllerValue(in, EPSDrive);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);

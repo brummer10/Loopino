@@ -1,6 +1,6 @@
 
 /*
- * Oberheim.h
+ * LM_SEM12.h
  *
  * SPDX-License-Identifier:  BSD-3-Clause
  *

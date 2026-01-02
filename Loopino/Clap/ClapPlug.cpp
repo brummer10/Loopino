@@ -16,6 +16,7 @@
 typedef struct plugin_t plugin_t;
 
 #define RUN_AS_PLUGIN
+#define IS_CLAP
 
 #if defined(_WIN32)
 #define GUIAPI CLAP_WINDOW_API_WIN32

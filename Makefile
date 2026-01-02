@@ -9,7 +9,7 @@ PASS := features
 
 SUBDIR := Loopino
 
-.PHONY: $(SUBDIR) libxputty  recurse 
+.PHONY: $(SUBDIR) libxputty rubberband recurse 
 
 $(MAKECMDGOALS) recurse: $(SUBDIR)
 
@@ -39,8 +39,10 @@ endif
 	@exec $(MAKE) --no-print-directory -j 1 -C $@ all
 endif
 
+rubberband:
+	@exec $(MAKE) --no-print-directory -j 1 -f Makefile.rubberband $(MAKECMDGOALS)
 
-$(SUBDIR): libxputty
+$(SUBDIR): libxputty rubberband
 ifeq (,$(filter $(PASS),$(MAKECMDGOALS)))
 	@exec $(MAKE) --no-print-directory -j 1 -C $@ $(MAKECMDGOALS)
 endif

@@ -1,3 +1,6 @@
 [submodule "libxputty"]
 	path = libxputty
 	url = https://github.com/brummer10/libxputty.git
+[submodule "rubberband"]
+	path = rubberband
+	url = https://github.com/breakfastquay/rubberband.git

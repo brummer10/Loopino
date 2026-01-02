@@ -14,14 +14,16 @@
 #include <algorithm>
 #include <random>
 
-#include "Oberheim.h"
+#include "LM_SEM12.h"
 #include "WaspFilter.h"
+#include "LadderFilter.h"
 #include "Limiter.h"
 #include "Chorus.h"
 #include "Reverb.h"
 #include "DcBlocker.h"
-#include "TB303Filter.h"
+#include "LM_ACD18Filter.h"
 #include "Tone.h"
+
 
 #ifndef SAMPLEPLAYER_H
 #define SAMPLEPLAYER_H
@@ -137,7 +139,7 @@ private:
             SampleBank: store Samples & Metadata
 ****************************************************************/
 
-struct SampleInfo {
+struct SampleInfo : public std::enable_shared_from_this<SampleInfo> {
     std::vector<float> data;
     double sourceRate = 44100.0;
     double rootFreq = 440.0;
@@ -160,6 +162,8 @@ public:
 private:
     std::vector<std::shared_ptr<const SampleInfo>> samples;
 };
+
+#include "KeyCache.h"
 
 /****************************************************************
         SamplePlayer: play voice with Resampling & Loop
@@ -210,6 +214,10 @@ public:
         loopStart = std::min(start, end);
         loopEnd = std::max(start, end);
         looping = enabled;
+    }
+
+    double computePhaseInc(double targetFreq, double rootFreq) const {
+        return (targetFreq / rootFreq) * (srIn / srOut);
     }
 
     void setPmMode(int m) {
@@ -279,7 +287,10 @@ public:
         return ph;
     }
 
-    void reset() { phase = 0.0; }
+    void reset() {
+        fadeCount = FADE_LEN;
+        phase = 0.0;
+    }
 
     inline float hermite_interpolation(const float* s, float t) {
         const float xm1 = s[-1];
@@ -371,8 +382,12 @@ public:
             if (phase >= size) 
                 return 0.0f;
         }
-
-        return val * gainMod;
+        float fade = 1.0f;
+        if (fadeCount > 0) {
+            fade = 1.0f - (float)fadeCount / FADE_LEN;
+            fadeCount--;
+        }
+        return val * fade * gainMod;
     }
 
     void processSave(int duration, std::vector<float>& abuf) {
@@ -432,216 +447,14 @@ private:
     float vibPhase = 0.0f;
     float tremPhase = 0.0f;
 
+    float lastOut = 0.0f;
+    int   fadeCount = 0;
+    constexpr static int FADE_LEN = 32;
+
     uint32_t noiseState = 1;
     size_t loopStart;
     size_t loopEnd;
     bool looping;
-};
-
-/****************************************************************
-        Zero Delay Feedback Ladder Filter (Moog style)
-****************************************************************/
-
-enum class LadderVoicing { Warm, Classic, Bright };
-
-struct ZDFLadderFilter {
-    const double leak = 0.99996;
-    double z1=0, z2=0, z3=0, z4=0;
-    double cutoff = 1000.0;
-    double resonance = 0.0;
-    double sampleRate = 44100.0;
-    double feedback = 1.0;
-    double voicing = 1.16;
-    int ccCutoff = 48;
-    int ccReso = 50;
-    float keyTracking = 1.0f;
-    bool filterOff = false;
-    bool highpass = false;
-    double g = 0.0;
-    double lastY4 = 0.0;
-    float fadeGain = 0.0f;
-    float fadeStep = 0.0f;
-    bool  targetOn = false; 
-
-    inline void update() {
-        // avoid > Nyquist and keep argument small for tan()
-        double fc = cutoff * voicing;
-        double nyq = 0.5 * sampleRate;
-        if (fc > nyq * 0.99) fc = nyq * 0.99;
-        if (fc < 1.0) fc = 1.0;
-        double x = (M_PI * fc) / sampleRate;
-        g = std::tan(x);
-        if (!std::isfinite(g) || g <= 0.0) g = 1e-12;
-    }
-
-    void setSampleRate(double sr) {
-        sampleRate = sr;
-        fadeStep = 1.0f / (0.02f * sampleRate);
-        update();
-    }
-
-    void reset() {
-        z1=z2=z3=z4=0.0;
-        lastY4 = 0.0;
-    }
-
-    void setVoicing(LadderVoicing v) {
-        switch(v) {
-            case LadderVoicing::Warm:      voicing = 1.12; break;
-            case LadderVoicing::Classic:   voicing = 1.16; break;
-            case LadderVoicing::Bright:    voicing = 1.30; break;
-            default:                       voicing = 1.16; break;
-        }
-        update();
-    }
-
-    inline float tanh_fast(float x) {
-        float x2 = x * x;
-        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
-    }
-
-    inline double tpt(double x, double &s) {
-        double y = (x - s) * (g / (1.0 + g)) + s;
-        s = y + (y - s);
-        return y;
-    }
-
-    inline double process(double in) {
-        if (targetOn) {
-            fadeGain = std::min(1.0f, fadeGain + fadeStep);
-        } else {
-            fadeGain = std::max(0.0f, fadeGain - fadeStep);
-            if (fadeGain == 0.0f) {
-                filterOff = false;
-                return in;
-            }
-        }
-
-        double gComp = 1.0 / (1.0 + 0.5 * g);
-        double fb = feedback * gComp;
-        double u = in - fb * lastY4;
-
-        u = tanh_fast(u);
-
-        double y1 = tpt(u,  z1);
-        double y2 = tpt(y1, z2);
-        double y3 = tpt(y2, z3);
-        double y4 = tpt(y3, z4);
-        // leak
-        z1 *= leak;
-        z2 *= leak;
-        z3 *= leak;
-        z4 *= leak;
-
-        lastY4 = y4;
-
-        double resGainComp = 1.0 + (resonance * resonance) * 2.0;
-        double lp = y4 * resGainComp;
-        double hp = (in - 4.0 * y1) * 0.33 * resGainComp * 0.5; // (input - (y1 * 2.0 + y2)) * 0.33;  input - lp; //
-
-        if (!highpass) return in * (1.0f - fadeGain) + lp * fadeGain;
-        return in * (1.0f - fadeGain) + hp * fadeGain;
-    }
-
-};
-
-/****************************************************************
-        4-Pole Ladder Filter (Moog style)
-****************************************************************/
-
-struct LadderFilter {
-    const double leak = 0.99996;
-    double z1=0, z2=0, z3=0, z4=0; // 4 integrator stages
-    double cutoff = 1000.0;
-    double resonance = 0.0;
-    double sampleRate = 44100.0;
-    double feedback = 1.0;
-    double tunning = 0.5;
-    double voicing = 1.16; // classic
-    int ccCutoff = 68;
-    int ccReso = 68;
-    float keyTracking = 1.0f;
-    bool filterOff = false;
-    float fadeGain = 0.0f;
-    float fadeStep = 0.0f;
-    bool  targetOn = false; 
-
-    double bias = 0.0;
-    double biasCoeff = 0.00005; 
-    double dc_x1 = 0.0;
-    double dc_y1 = 0.0;
-    double dc_R  = 0.996;
-
-    void setSampleRate(double sr) {
-        sampleRate = sr;
-        fadeStep = 1.0f / (0.01f * sampleRate);
-        dc_R = exp(-2.0 * M_PI * 5.0 / sampleRate);
-    }
-
-    void reset() {
-        z1=z2=z3=z4=0.0;
-        dc_x1 = dc_y1 = 0.0;
-        bias = 0.0;
-    }
-
-    void setVoicing(LadderVoicing v) {
-        switch(v) {
-            case LadderVoicing::Warm:      voicing = 1.12; break;
-            case LadderVoicing::Classic:   voicing = 1.16; break;
-            case LadderVoicing::Bright:    voicing = 1.30; break;
-            default:                       voicing = 1.16; break;
-        }
-    }
-
-    inline double dcBlock(double x) {
-        double y = x - dc_x1 + dc_R * dc_y1;
-        dc_x1 = x;
-        dc_y1 = y;
-        return y;
-    }
-
-    inline double removeBias(double x) {
-        bias += biasCoeff * (x - bias);
-        return x - bias;
-    }
-
-    inline double tanh_fast(double x) {
-        double x2 = x * x;
-        return x * (27.0f + x2) / (27.0f + 9.0f * x2);
-    }
-
-    inline double process(double in) {
-        if (targetOn) {
-            fadeGain = std::min(1.0f, fadeGain + fadeStep);
-        } else {
-            fadeGain = std::max(0.0f, fadeGain - fadeStep);
-            if (fadeGain == 0.0f) {
-                filterOff = false;
-                return in;
-            }
-        }
-        double input = in;
-        in -= z4 * feedback;
-        double drive = 1.0 + resonance * 0.05;
-        in *= drive;
-        in = removeBias(in);
-        in = tanh_fast(in);
-        // 4 cascaded one-pole filters
-        z1 += tunning * (in - z1);
-        z2 += tunning * (z1 - z2);
-        z3 += tunning * (z2 - z3);
-        z4 += tunning * (z3 - z4);
-        // leak
-        z1 *= leak;
-        z2 *= leak;
-        z3 *= leak;
-        z4 *= leak;
-
-        double resGainComp = 1.0 + (resonance * resonance) * 2.0;
-        double lp = z4 * resGainComp;
-        lp = dcBlock(lp);
-        return input * (1.0f - fadeGain) + lp * fadeGain;
-    }
 };
 
 /****************************************************************
@@ -652,13 +465,14 @@ class SampleVoice {
 public:
     SampleVoice(double sr = 44100.0)
         : env(sr) {}
-
+    KeyCache *rb = nullptr;
     // Attack, Decay, Sustain, Release 
     void setADSR(float a, float d, float s, float r) {
         env.setParams(a, d, s, r);
     }
 
     void setSampleRate(double sr) {
+        sampleRate = sr;
         env.setSampleRate(sr);
         filterLP.setSampleRate(sr);
         filterHP.setSampleRate(sr);
@@ -699,6 +513,8 @@ public:
 
     void setOnOffWasp(bool on) { wasp.setOnOff(on); }
 
+    void setAge(float v) { age = ageCurve(v); }
+
     void setPitchWheel(float f) {
         float semitones = f * 2.0f;
         float factor = pow(2.0, semitones / 12.0);
@@ -719,7 +535,7 @@ public:
     void setOnOffLP(bool value) {
         filterLP.targetOn = value;
         if (value && !filterLP.filterOff) {
-            recalcFilter(filterLP);
+            filterLP.recalcFilter(midiNote);
             filterLP.reset();
             filterLP.filterOff = true;
         }
@@ -738,7 +554,7 @@ public:
     void setOnOffHP(bool value) {
         filterHP.targetOn = value;
         if (value && !filterHP.filterOff) {
-            recalcFilter(filterLP);
+            filterHP.recalcFilter(midiNote);
             filterHP.reset();
             filterHP.filterOff = true;
         }
@@ -779,22 +595,40 @@ public:
 
     void noteOn(int midiNote, float velocity,
                 std::shared_ptr<const SampleInfo> sampleData,
-                double sourceRate, double rootFreq, bool looping = true) {
+                double sourceRate, double rootFreq_, bool looping = true) {
 
         this->midiNote = midiNote;
-        this->rootFreq = rootFreq;
+        rootFreq = rootFreq_;
         active = true;
         vel = velocityCurve(velocity);
+
+        if (!looping) {
+            auto s = rb->getNearest(midiNote);
+            if (s) {
+                sampleData = s;
+                sourceRate = s->sourceRate;
+                rootFreq   = s->rootFreq;
+            }
+        } else {
+            auto s = rb->getLoop();
+            if (s) {
+                sampleData = s;
+                sourceRate = s->sourceRate;
+                rootFreq   = s->rootFreq;
+            }
+        }
+
         player.setSample(sampleData, sourceRate);
         player.setFrequency(midiToFreq(midiNote), rootFreq);
         player.setLoop(0, sampleData->data.size() - 1, looping);
         player.reset();
+
         obf.recalcFilter(midiNote);
         obf.reset();
         wasp.setMidiNote(midiNote);
-        recalcFilter(filterLP);
+        filterLP.recalcFilter(midiNote);
         filterLP.reset();
-        recalcFilter(filterHP);
+        filterHP.recalcFilter(midiNote);
         filterHP.reset();
         env.noteOn();
     }
@@ -824,6 +658,8 @@ public:
         float amp = env.process();
         float out = player.process() * vel * amp;
         if (!env.isActive()) active = false;
+        //out = vintageAgeWarp(out);
+        //out = ageSlew(out);
         //float lfo_ = lfo.process();
         out = obf.process(out);
         out = wasp.process(out);
@@ -869,61 +705,37 @@ private:
     WaspFilter wasp;
 
     bool active = false;
+    double sampleRate = 44100.0f;
     float vel = 1.0f;
     float velmode = 0.7f;
     float velComp = 1.0f;
     float freq = 440.0f;
     float pitch = 0.0f;
+    float age = 0.25f;
     int midiNote = -1;
     double rootFreq = 440.0;
-
-    const float minFreq = 20.0;
-    const float maxFreq = 20000.0;
-    const float minQ = 0.6;
-    const float maxQ = 10.0;
-
-    double ccToFreq(int v) const {
-        double t = v / 127.0;
-        return minFreq * std::pow(maxFreq/minFreq, t);
-    }
-
-    double ccToQ(int v) const {
-        double t = std::pow(v / 127.0, 0.8);
-        return minQ + t * (maxQ - minQ);
-    }
 
     inline double midiToFreq(int midiNote) {
         return  (freq + pitch) * std::pow(2.0, (midiNote - 69 ) / 12.0);
     }
 
-    void recalcFilter(LadderFilter& filter) {
-        if (!filter.filterOff) return;
-
-        float baseCut = ccToFreq(filter.ccCutoff);
-        float semi = midiNote - 60;
-        float keyFactor = std::pow(2.0f, (semi / 12.0f) * filter.keyTracking);
-        double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
-        filter.cutoff = finalCut;
-        //std::cout << finalCut << std::endl;
-        double Q = ccToQ(filter.ccReso);
-        filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95);
-        filter.tunning = 2.0 * (filter.cutoff / filter.sampleRate) * filter.voicing;
-        filter.feedback = filter.resonance * 4.0 * (1.0 - 0.15 * filter.tunning * filter.tunning);
+    inline float ageCurve(float a)
+    {
+        return a * a * (3.0f - 2.0f * a);
     }
 
-    void recalcFilter(ZDFLadderFilter& filter) {
-        if (!filter.filterOff) return;
+    inline float vintageAgeWarp(float x) {
+        float w = 1.0f + age * 0.0012f;
+        float a = age * 0.00045f;
+        return x * w + a * x * x * x;
+    }
 
-        float baseCut = ccToFreq(filter.ccCutoff);
-        float semi = midiNote - 60;
-        float keyFactor = std::pow(2.0f, (semi / 12.0f) * filter.keyTracking);
-        double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
-        filter.cutoff = finalCut;
-        double Q = ccToQ(filter.ccReso);
-        filter.resonance = std::clamp((Q - 0.5) * 0.22, 0.0, 0.95);
-        filter.update();
-        double gComp = 1.0 / (1.0 + 0.5 * filter.g);
-        filter.feedback = filter.resonance * 3.5 * gComp;
+    inline float ageSlew(float x) {
+        static float z = 0;
+        float cutoff = 14000.0f - age * 12000.0f;
+        float g = 1.0f - expf(-2.0f * float(M_PI) * cutoff / sampleRate);
+        z += g * (x - z);
+        return z;
     }
 
 };
@@ -936,6 +748,7 @@ private:
 class PolySynth {
 public:
     PolySynth() {}
+    KeyCache rb;
 
     void init(double sr, size_t maxVoices = 8) {
         voices.clear();
@@ -955,21 +768,27 @@ public:
         for (auto& v : voices) {
             v->setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
             v->setSampleRate(sr);
+            v->rb = &rb;
         }
     }
 
     void setLoop(bool loop) {
         playLoop = loop;
+        //rb.clear();
         tbfilter.hardReset();
     }
 
     void setLoopBank(const SampleBank* lbank) {
         loopBank = lbank;
+        rb.setLoopRoot(loopBank->getSample(0));
+        rb.makeLoop();
         tbfilter.hardReset();
     }
 
     void setBank(const SampleBank* sbank) {
         sampleBank = sbank;
+        //rb.build(sampleBank->getSample(0), sampleRate);
+        rb.setRoot(sampleBank->getSample(0));
         tbfilter.hardReset();
     }
 
@@ -1048,6 +867,29 @@ public:
     void setTBOnOff(int v)  { tbfilter.setOnOff(intToBool(v)); }
 
     void setTone(float v) { tone.setTone(v); }
+    void setAge(float v) { updateAllVoices(&SampleVoice::setAge, v); }
+
+    void setLM_MIR8OnOff(int o) { rb.setLM_MIR8OnOff(intToBool(o)); }
+    void setLM_MIR8Drive(float d) { rb.setLM_MIR8Drive(d); }
+    void setLM_MIR8Amount(float a) { rb.setLM_MIR8Amount(a); }
+
+    void setEmu_12OnOff(int o) { rb.setEmu_12OnOff(intToBool(o)); }
+    void setEmu_12Drive(float d) { rb.setEmu_12Drive(d); }
+    void setEmu_12Amount(float a) { rb.setEmu_12Amount(a); }
+
+    void setLM_CMP12OnOff(int o) { rb.setLM_CMP12OnOff(intToBool(o)); }
+    void setLM_CMP12Drive(float d) { rb.setLM_CMP12Drive(d); }
+    void setLM_CMP12Ratio(float r) { rb.setLM_CMP12Ratio(r); }
+
+    void setStudio_16OnOff(int o) { rb.setStudio_16OnOff(intToBool(o)); }
+    void setStudio_16Drive(float d) { rb.setStudio_16Drive(d); }
+    void setStudio_16Warmth(float w) { rb.setStudio_16Warmth(w); }
+    void setStudio_16HfTilt(float h) { rb.setStudio_16HfTilt(h); }
+
+    void setVFX_EPSOnOff(int o)  { rb.setVFX_EPSOnOff(intToBool(o)); }
+    void setVFX_EPSDrive(float d)  { rb.setVFX_EPSDrive(d); }
+    
+    void rebuildKeyCache() { rb.rebuild(); }
 
     void noteOff(int midiNote) {
         updateAllVoices(static_cast<void (SampleVoice::*)(int)>(&SampleVoice::noteOff), midiNote);
@@ -1112,7 +954,7 @@ private:
     Chorus chorus;
     Reverb reverb;
     DcBlocker dcblocker;
-    TB303Filter tbfilter;
+    LM_ACD18Filter tbfilter;
     Baxandall tone;
 
     const SampleBank* sampleBank = nullptr;

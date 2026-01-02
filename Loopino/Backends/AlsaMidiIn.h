@@ -154,7 +154,7 @@ private:
     void run() {
         uint8_t byte = 0;
         uint8_t status = 0;
-        uint8_t data[2] = {0};
+        uint8_t data[3] = {0};
         int idx = 0;
 
         MidiKeyboard* keys =

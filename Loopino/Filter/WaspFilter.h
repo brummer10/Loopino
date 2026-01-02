@@ -1,4 +1,18 @@
 
+/*
+ * WaspFilter.h
+ *
+ * SPDX-License-Identifier:  BSD-3-Clause
+ *
+ * Copyright (C) 2025 brummer <brummer@web.de>
+ */
+
+
+/****************************************************************
+        WaspFilter.h - a 4 x one pole multi mode filter with
+                       asymmetric feedback and dirty key tracking 
+****************************************************************/
+
 #pragma once
 #include <cmath>
 #include <algorithm>
@@ -99,10 +113,7 @@ private:
         if (keyTrack > 0.0f) {
             float noteOffset = (midiNote - 60.0f) / 12.0f;
             float kt = std::pow(2.0f, noteOffset);
-
-            // absichtlich nicht sauber
             kt = std::pow(kt, 0.85f + 0.3f * keyTrack);
-
             cutoff *= 1.0f + keyTrack * (kt - 1.0f);
         }
 
@@ -112,16 +123,13 @@ private:
     inline float mixOutputs(float hp, float bp, float lp) const {
         float hpAmt = std::clamp(-mix, 0.0f, 1.0f);
         float lpAmt = std::clamp( mix, 0.0f, 1.0f);
-
         float bpAmt = 1.0f - std::abs(mix);
         bpAmt = std::pow(bpAmt, 0.7f);
-
         return hp * hpAmt + bp * bpAmt + lp * lpAmt;
     }
 
     inline float mixFeedback(float in, float bp, float lp) const {
         float hp = in - lp;
-
         float hpAmt = std::clamp(-mix, 0.0f, 1.0f);
         float lpAmt = std::clamp( mix, 0.0f, 1.0f);
         float bpAmt = 1.0f - std::abs(mix);
@@ -150,11 +158,4 @@ private:
     OnePole s1, s2, s3, s4;
     OnePole fbFilter;
 };
-
-/*
-filter.setCutoff(800.0f);
-filter.setResonance(0.6f);
-filter.setFilterMix(0.2f); 
-filter.setKeyTrack(0.7f);
-*/
 

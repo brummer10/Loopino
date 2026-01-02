@@ -64,11 +64,27 @@
         param.registerParam("Wasp Resonance","Wasp",0.0, 1.0, 0.4, 0.01, (void*)&waspresonance,false,  IS_FLOAT);
         param.registerParam("Wasp CutOff","Wasp",40.0, 12000.0, 1000.0, 0.01,(void*)&waspcutoff,false, IS_FLOAT);
         param.registerParam("Wasp Keytracking","Wasp",0.0, 1.0, 0.5, 0.01,(void*)&waspkeytracking,false,IS_FLOAT);
-        param.registerParam("TB On/Off", "TB303",0, 1, 0, 1,              (void*)&tbonoff,       true,  IS_INT);
-        param.registerParam("TB Vintage","TB303",0.0, 1.0, 0.3, 0.01,     (void*)&tbvintage,    false,  IS_FLOAT);
-        param.registerParam("TB Resonance","TB303",0.0, 1.0, 0.75, 0.01,  (void*)&tbresonance,  false,  IS_FLOAT);
-        param.registerParam("TB CutOff","TB303",40.0, 12000.0, 500.0, 0.01,(void*)&tbcutoff,    false,  IS_FLOAT);
-        param.registerParam("Tone",     "Synth", -1.0, 1.0, 0.0, 0.01,    (void*)&tone,         false,  IS_FLOAT);
+        param.registerParam("TB On/Off", "LM_ACD18",0, 1, 0, 1,              (void*)&tbonoff,      true,  IS_INT);
+        param.registerParam("TB Vintage","LM_ACD18",0.0, 1.0, 0.3, 0.01,     (void*)&tbvintage,   false,  IS_FLOAT);
+        param.registerParam("TB Resonance","LM_ACD18",0.0, 1.0, 0.75, 0.01,  (void*)&tbresonance, false,  IS_FLOAT);
+        param.registerParam("TB CutOff","LM_ACD18",40.0, 12000.0, 5000.0, 0.01,(void*)&tbcutoff,  false,  IS_FLOAT);
+        param.registerParam("Tone",     "Synth", -1.0, 1.0, 0.0, 0.01,    (void*)&tone,           false,  IS_FLOAT);
+      //  param.registerParam("Age",      "Synth", 0.0, 1.0, 0.25, 0.01,    (void*)&age,          false,  IS_FLOAT);
+        param.registerParam("LM_MIR8 On/Off", "Machine",0, 1, 0, 1,        (void*)&mrgonoff,       true,  IS_INT);
+        param.registerParam("LM_MIR8 Drive","Machine",0.25, 1.5, 1.3, 0.01,(void*)&mrgdrive,      false,  IS_FLOAT);
+        param.registerParam("LM_MIR8 Amount","Machine",0.1, 1.0, 0.25, 0.01,(void*)&mrgamount,    false,  IS_FLOAT);
+        param.registerParam("Emu_12 On/Off", "Machine",0, 1, 0, 1,           (void*)&emu_12onoff,  true,  IS_INT);
+        param.registerParam("Emu_12 Drive","Machine",0.25, 2.5, 1.2, 0.01,   (void*)&emu_12drive, false,  IS_FLOAT);
+        param.registerParam("Emu_12 Amount","Machine",0.1, 1.0, 1.0, 0.01,   (void*)&emu_12amount,false,  IS_FLOAT);
+        param.registerParam("LM_CMP12 On/Off", "Machine",0, 1, 0, 1,         (void*)&cmp12onoff,   true,  IS_INT);
+        param.registerParam("LM_CMP12 Drive","Machine",0.25, 2.5, 1.0, 0.01, (void*)&cmp12drive,  false,  IS_FLOAT);
+        param.registerParam("LM_CMP12 Ratio","Machine",0.1, 1.0, 1.65, 0.01, (void*)&cmp12ratio,  false,  IS_FLOAT);
+        param.registerParam("Studio16 On/Off","Machine",0, 1, 0, 1,         (void*)&studio16onoff, true,  IS_INT);
+        param.registerParam("Studio16 Drive","Machine",0.25, 1.5, 1.1, 0.01,(void*)&studio16drive,false,  IS_FLOAT);
+        param.registerParam("Studio16 Warmth","Machine",0.0, 1.0, 0.65, 0.01,(void*)&studio16warmth,false, IS_FLOAT);
+        param.registerParam("Studio16 HfTilt","Machine",0.0, 1.0, 0.45, 0.01,(void*)&studio16hftilt,false, IS_FLOAT);
+        param.registerParam("EPS On/Off",     "Machine",0, 1, 0, 1,         (void*)&epsonoff,       true,  IS_INT);
+        param.registerParam("EPS Drive",      "Machine",0.25, 1.5, 1.0, 0.01,(void*)&epsdrive,     false,  IS_FLOAT);
     }
 
     void setValuesFromHost() {
@@ -130,6 +146,22 @@
             adj_set_value(TBResonance->adj, tbresonance);
             adj_set_value(TBCutOff->adj, tbcutoff);
             adj_set_value(Tone->adj, tone);
+           // adj_set_value(Age->adj, age);
+            adj_set_value(LM_MIR8OnOff->adj, (float)mrgonoff);
+            adj_set_value(LM_MIR8Drive->adj, mrgdrive);
+            adj_set_value(LM_MIR8Amount->adj, mrgamount);
+            adj_set_value(Emu_12OnOff->adj, (float)emu_12onoff);
+            adj_set_value(Emu_12Drive->adj, emu_12drive);
+            adj_set_value(Emu_12Amount->adj, emu_12amount);
+            adj_set_value(LM_CMP12OnOff->adj, (float)cmp12onoff);
+            adj_set_value(LM_CMP12Drive->adj, cmp12drive);
+            adj_set_value(LM_CMP12Ratio->adj, cmp12ratio);
+            adj_set_value(Studio_16OnOff->adj, (float)studio16onoff);
+            adj_set_value(Studio_16Drive->adj, studio16drive);
+            adj_set_value(Studio_16Warmth->adj, studio16warmth);
+            adj_set_value(Studio_16HfTilt->adj, studio16hftilt);
+            adj_set_value(EPSOnOff->adj, (float)epsonoff);
+            adj_set_value(EPSDrive->adj, epsdrive);
 
             expose_widget(LpKeyTracking);
             expose_widget(HpKeyTracking);
@@ -192,6 +224,22 @@
         synth.setResonanceTB(tbresonance);
         synth.setCutoffTB(tbcutoff);
         synth.setTone(tone);
+       // synth.setAge(age);
+        synth.setLM_MIR8OnOff(mrgonoff);
+        synth.setLM_MIR8Drive(mrgdrive);
+        synth.setLM_MIR8Amount(mrgamount);
+        synth.setEmu_12OnOff(emu_12onoff);
+        synth.setEmu_12Drive(emu_12drive);
+        synth.setEmu_12Amount(emu_12amount);
+        synth.setLM_CMP12OnOff(cmp12onoff);
+        synth.setLM_CMP12Drive(cmp12drive);
+        synth.setLM_CMP12Ratio(cmp12ratio);
+        synth.setStudio_16OnOff(studio16onoff);
+        synth.setStudio_16Drive(studio16drive);
+        synth.setStudio_16Warmth(studio16warmth);
+        synth.setStudio_16HfTilt(studio16hftilt);
+        synth.setVFX_EPSOnOff(epsonoff);
+        synth.setVFX_EPSDrive(epsdrive);
     }
 
 #if defined (RUN_AS_PLUGIN)
@@ -395,6 +443,22 @@
         out.write(&tbcutoff, sizeof(tbcutoff));
         out.write(&tone, sizeof(tone));
 
+        out.write(&mrgonoff, sizeof(mrgonoff));
+        out.write(&mrgdrive, sizeof(mrgdrive));
+        sout.write(&mrgamount, sizeof(mrgamount));
+        out.write(&emu_12onoff, sizeof(emu_12onoff));
+        out.write(&emu_12drive, sizeof(emu_12drive));
+        out.write(&emu_12amount, sizeof(emu_12amount));
+        out.write(&cmp12onoff, sizeof(cmp12onoff));
+        out.write(&cmp12drive, sizeof(cmp12drive));
+        out.write(&cmp12ratio, sizeof(cmp12ratio));
+        out.write(&studio16onoff, sizeof(studio16onoff));
+        out.write(&studio16drive, sizeof(studio16drive));
+        out.write(&studio16warmth, sizeof(studio16warmth));
+        out.write(&studio16hftilt, sizeof(studio16hftilt));
+        out.write(&epsonoff, sizeof(epsonoff));
+        out.write(&epsdrive, sizeof(epsdrive));
+
         writeSamples(out, af.samples, af.samplesize);
         // since version 13
         out.write(&jack_sr, sizeof(jack_sr));
@@ -507,6 +571,22 @@
             in.read(&tbresonance, sizeof(tbresonance));
             in.read(&tbcutoff, sizeof(tbcutoff));
             in.read(&tone, sizeof(tone));
+
+            in.read(&mrgonoff, sizeof(mrgonoff));
+            in.read(&mrgdrive, sizeof(mrgdrive));
+            sin.read(&mrgamount, sizeof(mrgamount));
+            in.read(&emu_12onoff, sizeof(emu_12onoff));
+            in.read(&emu_12drive, sizeof(emu_12drive));
+            in.read(&emu_12amount, sizeof(emu_12amount));
+            in.read(&cmp12onoff, sizeof(cmp12onoff));
+            in.read(&cmp12drive, sizeof(cmp12drive));
+            in.read(&cmp12ratio, sizeof(cmp12ratio));
+            in.read(&studio16onoff, sizeof(studio16onoff));
+            in.read(&studio16drive, sizeof(studio16drive));
+            in.read(&studio16warmth, sizeof(studio16warmth));
+            in.read(&studio16hftilt, sizeof(studio16hftilt));
+            in.read(&epsonoff, sizeof(epsonoff));
+            in.read(&epsdrive, sizeof(epsdrive));
         }
 
         readSamples(in, af.samples, af.samplesize);

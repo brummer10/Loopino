@@ -22,8 +22,10 @@ endif
 
 ifneq ($(MAKECMDGOALS),clap)
   ifneq ($(MAKECMDGOALS),vst2)
-    USEAPI = jack
-    LDFLAGS += -lasound
+    ifeq ($(TARGET), Linux)
+      USEAPI = jack
+      LDFLAGS += -lasound
+    endif
   endif
 endif
 
@@ -75,11 +77,6 @@ endif
 	HEADER_DIR := $(LIB_DIR)include/
 	RESOURCES := $(wildcard $(RESOURCES_DIR)*.png)
 
-	RESAMP_DIR := ./zita-resampler-1.1.0/
-	RESAMP_SOURCES := $(wildcard $(RESAMP_DIR)*.cc)
-	RESAMP_OBJ := $(patsubst %.cc,%.o,$(RESAMP_SOURCES))
-	RESAMP_LIB := libzita-resampler.$(STATIC_LIB_EXT)
-
 	CLAP_DIR := ./Clap/
 	CLAP_INCLUDE := -I. -I./Clap/clap/ -I./Clap/
 	CLAP_SOURCES := $(CLAP_DIR)ClapPlug.cpp
@@ -90,11 +87,13 @@ endif
 
 ifeq ($(TARGET), Linux)
 	# set compile flags
-	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f`\
+	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f `\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
 	CXXFLAGS += -MMD -std=c++17 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
-	LDFLAGS += -I. -lm -pthread -lpthread -lstdc++ `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f`
+	LDFLAGS += -I. -I./Machines/ -I./Filter/ -I./Backends/ -lm -pthread -lpthread -lstdc++ \
+	-I../rubberband/ -I../rubberband/rubberband/ -L. ../rubberband/lib/librubberband.$(STATIC_LIB_EXT) \
+	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f `
 	ifneq ($(MACOS)$(WINDOWS),true)
 		LDFLAGS += -lrt -lc
 	endif
@@ -108,13 +107,15 @@ else ifeq ($(TARGET), Windows)
 
 	CXXFLAGS += -MMD -std=c++17 -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
-	LDFLAGS += -I. -lm -pthread -lpthread  $(PAWPAW_LFLAGS) `$(PKGCONFIG) --cflags --libs $(USEAPI) sndfile fftw3f`
+	LDFLAGS += -I. -I./Machines/ -I./Filter/ -I./Backends/ -lm -pthread -lpthread  $(PAWPAW_LFLAGS) \
+	`$(PKGCONFIG) --cflags --libs $(USEAPI) sndfile fftw3f ` \
+	-I../rubberband/ -I../rubberband/rubberband/ -L. ../rubberband/lib/librubberband.$(STATIC_LIB_EXT)
 
 	GUI_LDFLAGS += -I$(HEADER_DIR) -static-libgcc -static-libstdc++ \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags --libs cairo ` \
 	-L. $(LIB_DIR)libxputty.$(STATIC_LIB_EXT) -lm $(PAWPAW_LFLAGS)
 
-	CFLAGS += -I. -I./zita-resampler-1.1.0 -Wall -funroll-loops `$(PKGCONFIG) --cflags $(USEAPI) sndfile fftw3f`\
+	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) --cflags $(USEAPI) sndfile fftw3f`\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections -Wl,--gc-sections \
 	-pthread $(SSE_CFLAGS)
 
@@ -125,16 +126,20 @@ endif
 	# invoke build files
 	OBJECTS = main.cpp
 
-	DEPS = loopino.d $(RESAMP_DIR)resampler.d  $(RESAMP_DIR)resampler_table.d
+	DEPS = loopino.d
 
 .PHONY : mod all clean install uninstall info
 
+ifeq ($(TARGET), Linux)
 all : check $(NAME)
 	$(QUIET)mkdir -p ../bin
 	$(QUIET)cp ./$(NAME)$(EXE) ../bin
 	@if ! [ -f ../bin/$(NAME)$(EXE) ]; then \
 		$(R_ECHO) "Sorry, build fail$(reset)"; \
 	fi
+else
+all: clap
+endif
 
 debug : all
 
@@ -158,13 +163,12 @@ endif
 
 info:
 	$(info $(yellow) INFO: $(reset) cxxflags $(blue) $(CXX) $(CXXFLAGS) $(reset))
-	$(info $(yellow) INFO: $(reset) ldflags  $(blue) $(LDFLAGS) $(GUI_LDFLAGS))
+	$(info $(yellow) INFO: $(reset) ldflags  $(blue) $(LD) $(LDFLAGS) $(GUI_LDFLAGS))
 	@$(B_ECHO) "=================== INFO =======================$(reset)"
 
 
 clean :
 	$(QUIET)rm -f *.o *.d *.a *.lib 
-	$(QUIET)rm -f $(RESAMP_DIR)*.a $(RESAMP_DIR)*.lib $(RESAMP_DIR)*.o $(RESAMP_DIR)*.d
 	$(QUIET)rm -f $(NAME).exe $(NAME) $(NAME).clap $(NAME)vst.$(LIB_EXT)
 	$(QUIET)rm -rf ../bin
 
@@ -207,36 +211,28 @@ uninstall :
 	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
 	$(QUIET)rm -rf $(DESTDIR)$(VST2_INSTAL_DIR)/$(NAME)vst.$(LIB_EXT)
 
-$(RESAMP_OBJ): $(RESAMP_SOURCES)
-	@$(ECHO) "Building object file $@ $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -MMD  -c $(patsubst %.o,%.cc,$@) -o $@ -I./zita-resampler-1.1.0
-
-$(RESAMP_LIB): $(RESAMP_OBJ)
-	@$(B_ECHO) "Build static library $@ $(reset)"
-	$(QUIET)$(AR) rcs $(RESAMP_LIB) $(RESAMP_OBJ)
-	@$(B_ECHO) "=================== DONE =======================$(reset)"
-
-$(NAME).clap: $(CLAP_SOURCES) Loopino_ui.h  $(RESAMP_LIB) | info
+$(NAME).clap: $(CLAP_SOURCES) Loopino_ui.h | info
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -L. $(RESAMP_LIB) -o $(NAME).clap $(GUI_LDFLAGS) $(LDFLAGS)
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -o $(NAME).clap $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
 endif
 
-$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h  $(RESAMP_LIB) | info
+$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h | info
 	@$(B_ECHO) "Compiling $(NAME)vst.$(LIB_EXT) $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -L. $(RESAMP_LIB) -o $(NAME)vst.$(LIB_EXT) $(GUI_LDFLAGS) $(LDFLAGS)
+	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -o $(NAME)vst.$(LIB_EXT) $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME)vst.$(LIB_EXT)
 endif
 
-$(NAME) : $(OBJECTS) $(RESAMP_LIB) Loopino_ui.h | info
+$(NAME) : $(OBJECTS) Loopino_ui.h | info
+ifeq ($(TARGET), Linux)
 	@$(B_ECHO) "Build $@ $(reset)"
-	$(QUIET)$(CXX) -MMD $(CXXFLAGS) $(OBJECTS) -L. $(RESAMP_LIB) -o $(NAME)$(EXE) $(LDFLAGS) $(GUI_LDFLAGS)
+	$(QUIET)$(CXX) -MMD $(CXXFLAGS) $(OBJECTS) -o $(NAME)$(EXE) $(LDFLAGS) $(GUI_LDFLAGS)
 ifneq ($(MAKECMDGOALS),debug)
 	$(QUIET)$(STRIP) -s -x -X -R .note.ABI-tag $(NAME)$(EXE)
 endif
 	@$(B_ECHO) "=================== DONE =======================$(reset)"
-
+endif
 doc:
 	#pass

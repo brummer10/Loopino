@@ -1,0 +1,78 @@
+
+CXX		:= $(QUIET)$(CXX)
+
+OPTFLAGS	:= -std=c++11 -DNDEBUG -ffast-math -O3 -ftree-vectorize -fPIC
+
+ARCHFLAGS	:= 
+ifeq ($(TARGET), Linux)
+	CXXFLAGS	:= $(ARCHFLAGS) $(OPTFLAGS) -I. -Irubberband/src -Irubberband/rubberband -DUSE_BQRESAMPLER \
+	-DUSE_BUILTIN_FFT -DNO_THREAD_CHECKS -DUSE_PTHREADS -DNO_TIMING -DHAVE_POSIX_MEMALIGN -DNDEBUG
+else ifeq ($(TARGET), Windows)
+	CXXFLAGS	:= $(ARCHFLAGS) $(OPTFLAGS) -I. -Irubberband/src -Irubberband/rubberband -DUSE_BQRESAMPLER \
+	-DUSE_BUILTIN_FFT -DNO_THREAD_CHECKS -DUSE_PTHREADS -DNO_TIMING -DLACK_POSIX_MEMALIGN -DNDEBUG
+endif
+CFLAGS		:= $(ARCHFLAGS) $(OPTFLAGS)
+
+AR		:= $(AR)
+MKDIR		:= mkdir -p
+
+LIBNAME		:= librubberband
+
+STATIC_TARGET  	:= rubberband/lib/$(LIBNAME).$(STATIC_LIB_EXT)
+
+BUILD_DIR		:= rubberband/lib
+
+default:	lib $(STATIC_TARGET)
+all:		lib $(STATIC_TARGET)
+static:		lib $(STATIC_TARGET)
+clap:		lib $(STATIC_TARGET)
+vst2:		lib $(STATIC_TARGET)
+debug:		lib $(STATIC_TARGET)
+
+PUBLIC_INCLUDES := \
+	rubberband/rubberband/rubberband-c.h \
+	rubberband/rubberband/RubberBandStretcher.h
+
+LIBRARY_SOURCES := \
+	rubberband/src/rubberband-c.cpp \
+	rubberband/src/RubberBandStretcher.cpp \
+	rubberband/src/faster/AudioCurveCalculator.cpp \
+	rubberband/src/faster/CompoundAudioCurve.cpp \
+	rubberband/src/faster/HighFrequencyAudioCurve.cpp \
+	rubberband/src/faster/SilentAudioCurve.cpp \
+	rubberband/src/faster/PercussiveAudioCurve.cpp \
+	rubberband/src/faster/R2Stretcher.cpp \
+	rubberband/src/faster/StretcherChannelData.cpp \
+	rubberband/src/faster/StretcherProcess.cpp \
+	rubberband/src/common/Allocators.cpp \
+	rubberband/src/common/BQResampler.cpp \
+	rubberband/src/common/FFT.cpp \
+	rubberband/src/common/Log.cpp \
+	rubberband/src/common/Profiler.cpp \
+	rubberband/src/common/Resampler.cpp \
+	rubberband/src/common/StretchCalculator.cpp \
+	rubberband/src/common/sysutils.cpp \
+	rubberband/src/common/mathmisc.cpp \
+	rubberband/src/common/Thread.cpp \
+	rubberband/src/finer/R3Stretcher.cpp 
+        
+LIBRARY_OBJECTS := $(LIBRARY_SOURCES:.cpp=.o)
+LIBRARY_OBJECTS := $(LIBRARY_OBJECTS:.c=.o)
+
+$(STATIC_TARGET): $(LIBRARY_OBJECTS)
+	@$(AR) rsc $@ $^
+	@$(B_ECHO) "=================== DONE =======================$(reset)"
+
+$(BUILD_DIR):
+	@$(B_ECHO) "Build static library librubberband.$(STATIC_LIB_EXT) $(reset)"
+
+lib: | $(BUILD_DIR)
+	@$(MKDIR) rubberband/$@
+
+clean:
+	@rm -f $(LIBRARY_OBJECTS)
+	@rm -rf rubberband/lib
+
+distclean:	clean
+	@rm -f $(STATIC_TARGET)
+
