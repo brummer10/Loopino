@@ -83,6 +83,7 @@ void showMidiDeviceSelect() {
 }
 
 int main(int argc, char *argv[]){
+    //auto t1 = std::chrono::high_resolution_clock::now();
 
     if(0 == XInitThreads()) 
         std::cerr << "Warning: XInitThreads() failed\n" << std::endl;
@@ -105,7 +106,11 @@ int main(int argc, char *argv[]){
 
     main_init(&app);
     if (scaling != 1.0f) app.hdpi = scaling;
+
     ui.createGUI(&app);
+    //auto t2 = std::chrono::high_resolution_clock::now();
+    //auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+    //std::cout << duration/1e+6 << std::endl;
 
     signal (SIGQUIT, signal_handler);
     signal (SIGTERM, signal_handler);

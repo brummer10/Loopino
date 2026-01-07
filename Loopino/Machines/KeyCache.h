@@ -259,7 +259,9 @@ private:
 
         RubberBand::RubberBandStretcher rb(root->sourceRate,1,
             RubberBand::RubberBandStretcher::OptionProcessOffline|
-            RubberBand::RubberBandStretcher::OptionEngineFiner);
+            RubberBand::RubberBandStretcher::OptionEngineFiner|
+            RubberBand::RubberBandStretcher::OptionFormantPreserved |
+            RubberBand::RubberBandStretcher::OptionPhaseIndependent);
 
         double ratio = midiToFreq(note)/root->rootFreq;
         //rb.reset();
@@ -268,7 +270,8 @@ private:
         const float* sin[1] = { root->data.data() };
         rb.study(sin, root->data.size(), true);
 
-        rb.setMaxProcessSize(rb.getProcessSizeLimit());
+        rb.setExpectedInputDuration(root->data.size());
+        rb.setMaxProcessSize(root->sourceRate * 4);
         const float* in[1];
         std::vector<float> out;
         out.reserve(int(root->data.size() * ratio) + 1024);

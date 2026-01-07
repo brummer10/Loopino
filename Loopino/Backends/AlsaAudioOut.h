@@ -207,11 +207,39 @@ public:
         if (!pcm) return;
         snd_pcm_start(pcm);
 
+        static float fRec0[2] = {0};
         while (running.load()) {
+            if (( uiPtr->af.samplesize && uiPtr->af.samples != nullptr) && uiPtr->play && uiPtr->ready) {
+                float fSlow0 = 0.0010000000000000009 * uiPtr->gain;
+                for (uint32_t i = 0; i< framesPerBuffer; i++) {
+                    if (uiPtr->position > uiPtr->loopPoint_r) {
+                        for (; i < framesPerBuffer; i++) {
+                            stereo[i*2+0] = 0.0f;
+                            stereo[i*2+1] = 0.0f;
+                        }
+                        uiPtr->play = false;
+                        break;
+                    }
+
+                    fRec0[0] = fSlow0 + 0.999 * fRec0[1];
+                    for (uint32_t c = 0; c < uiPtr->af.channels; c++) {
+                        if (!c) {
+                            stereo[i * 2 + 0] = uiPtr->af.samples[uiPtr->position*uiPtr->af.channels] * fRec0[0];
+                            if (uiPtr->af.channels ==1) stereo[i * 2 + 1] = uiPtr->af.samples[uiPtr->position*uiPtr->af.channels] * fRec0[0];
+                        } else stereo[i * 2 + 1] = uiPtr->af.samples[uiPtr->position*uiPtr->af.channels+c] * fRec0[0];
+                    }
+                    fRec0[1] = fRec0[0];
+                    uiPtr->position++;
+                }
+            } else {
+                fRec0[1] = fRec0[0] = 0.0f;
+                uiPtr->position = uiPtr->loopPoint_l;
+                memset(stereo.data(), 0.0, framesPerBuffer * 2 * sizeof(float));
+            }
             for (uint32_t i = 0; i < framesPerBuffer; ++i) {
                 float s = uiPtr->synth.process();
-                stereo[i * 2 + 0] = s;
-                stereo[i * 2 + 1] = s;
+                stereo[i * 2 + 0] += s;
+                stereo[i * 2 + 1] += s;
             }
 
             snd_pcm_sframes_t written =

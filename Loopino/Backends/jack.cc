@@ -145,6 +145,14 @@ int jack_process(jack_nframes_t nframes, void *arg) {
     if (( ui.af.samplesize && ui.af.samples != nullptr) && ui.play && ui.ready) {
         float fSlow0 = 0.0010000000000000009 * ui.gain;
         for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
+            if (ui.position > ui.loopPoint_r) {
+                for (; i < (uint32_t)nframes; i++) {
+                    output[i] = 0.0f;
+                    output1[i] = 0.0f;
+                }
+                ui.play = false;
+                break;
+            }
             fRec0[0] = fSlow0 + 0.999 * fRec0[1];
             for (uint32_t c = 0; c < ui.af.channels; c++) {
                 if (!c) {
@@ -155,14 +163,10 @@ int jack_process(jack_nframes_t nframes, void *arg) {
             fRec0[1] = fRec0[0];
             // track play-head position
             ui.position++;
-            if (ui.position > ui.loopPoint_r) {
-                ui.position = ui.loopPoint_l;
-                ui.play = false;
-            } else if (ui.position <= ui.loopPoint_l) {
-                ui.position = ui.loopPoint_r;
-            }
         }
     } else {
+        fRec0[1] = fRec0[0] = 0.0f;
+        ui.position = ui.loopPoint_l;
         memset(output, 0.0, (uint32_t)nframes * sizeof(float));
         memset(output1, 0.0, (uint32_t)nframes * sizeof(float));
     }
