@@ -26,9 +26,12 @@ public:
         parent   = p;
         startX   = sx;
         startY   = sy;
+        startX1   = sx;
+        startY1   = sy;
         spacingX = spx;
         spacingY = spy;
         cellH    = rackH;
+        entries.clear();
         relayout();
     }
 
@@ -37,11 +40,18 @@ public:
         relayout();
     }
 
+    void relayoutNow() {
+        startX = startX1;
+        startY = startY1;
+        relayout();
+    }
+
 private:
     Widget_t* parent = nullptr;
     std::vector<Widget_t*> entries;
 
     int startX = 0, startY = 0;
+    int startX1 = 0, startY1 = 0;
     int spacingX = 0, spacingY = 0;
     int cellH = 0;
     int spaceNextRox = 0;

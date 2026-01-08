@@ -50,6 +50,11 @@ public:
     
     ~Params() {}
 
+    // clear the parameter list
+    void clearParam() {
+        parameter.clear();
+    }
+
     // register a parameter
     void registerParam(Parameter p) {
         parameter.push_back(p);
