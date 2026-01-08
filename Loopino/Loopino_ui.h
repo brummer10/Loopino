@@ -281,6 +281,12 @@ public:
                       main window
 ****************************************************************/
 
+    void setFrameCallbacks(Widget_t *frame) {
+        frame->func.button_press_callback = drag_frame;
+        frame->func.motion_callback = move_frame;;
+        frame->func.button_release_callback = drop_frame;
+    }
+
     // create the main GUI
     void createGUI(Xputty *app) {
         #ifndef RUN_AS_PLUGIN
@@ -1291,6 +1297,7 @@ private:
             adj_set_value(playbutton->adj, 0.0);
             expose_widget(playbutton);
         }
+        sz.updateTweens(1.0f / 60.0f);
         #ifndef RUN_AS_PLUGIN
         if (!record && timer == 0) {
             set_record();
@@ -2060,7 +2067,37 @@ private:
     void setAttack(float v)          { synth.setAttack(v); expose_widget(Envelope); }
     void setDecay(float v)           { synth.setDecay(v);  expose_widget(Envelope); }
     void setSustain(float v)         { synth.setSustain(v);  expose_widget(Envelope); }
-    void setRelease(float v)         { synth.setSustain(v);  expose_widget(Envelope); }
+    void setRelease(float v)         { synth.setRelease(v);  expose_widget(Envelope); }
+
+
+    static void drop_frame(void *w_, void* xbutton_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->sz.endDrag(xbutton->x_root, xbutton->y_root);
+        expose_widget(w);
+    }
+
+    static void drag_frame(void *w_, void* xbutton_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        XButtonEvent *xbutton = (XButtonEvent*)xbutton_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        self->sz.beginDrag(w, xbutton->x_root, xbutton->y_root);
+        
+    }
+
+    // move left loop point following the mouse pointer
+    static void move_frame(void *w_, void *xmotion_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        XMotionEvent *xmotion = (XMotionEvent*)xmotion_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        self->sz.dragMove(xmotion->x_root, xmotion->y_root);
+    }
+
 
     void commonWidgetSettings(Widget_t *wi) {
         wi->parent_struct = (void*)this;
