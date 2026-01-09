@@ -129,6 +129,8 @@ public:
     float loopFreq;
     float gain;
     float volume;
+    int glowDragX;
+    int glowDragY;
 
     bool loadNew;
     bool loadLoopNew;
@@ -149,6 +151,8 @@ public:
         loopPoint_r_auto = 0;
         frameSize = 0;
         gain = std::pow(1e+01, 0.05 * 0.0);
+        glowDragX = -1;
+        glowDragY = -1;
         is_loaded = false;
         loadNew = false;
         loadLoopNew = false;
@@ -366,7 +370,7 @@ public:
         Controls->scale.gravity = WESTEAST;
         Controls->func.expose_callback = draw_window_box;
         commonWidgetSettings(Controls);
-        sz.setParent(Controls, 10, 10, 5, 10, 75);
+        sz.setParent(Controls, 10, 10, 5, 10, 75 * app->hdpi, &glowDragX, &glowDragY);
         Widget_t* frame = nullptr;
 
         sz.add(frame = add_frame(Controls, "Sample Buffer", 0, 0, 258, 75));
@@ -3078,10 +3082,19 @@ private:
         Metrics_t metrics;
         os_get_window_metrics(p, &metrics);
         if (!metrics.visible) return;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         use_bg_color_scheme(w, NORMAL_);
         cairo_paint (w->crb);
+        if (self->glowDragX > 0) {
+            cairo_set_line_cap (w->crb, CAIRO_LINE_CAP_ROUND);
+            cairo_set_source_rgba(w->crb, 0.55, 0.65, 0.55, 0.4);
+            cairo_set_line_width(w->crb, 5);
+            cairo_move_to(w->crb, self->glowDragX, self->glowDragY);
+            cairo_line_to(w->crb, self->glowDragX, 75 * w->app->hdpi);
+            cairo_stroke(w->crb);
+        }
+        
         #ifndef RUN_AS_PLUGIN
-        Loopino *self = static_cast<Loopino*>(w->parent_struct);
         cairo_text_extents_t extents;
         /** show value on the kob**/
         char s[14];

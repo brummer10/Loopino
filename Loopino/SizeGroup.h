@@ -1,4 +1,12 @@
 
+/*
+ * SizeGroup.h
+ *
+ * SPDX-License-Identifier:  BSD-3-Clause
+ *
+ * Copyright (C) 2026 brummer <brummer@web.de>
+ */
+
 /****************************************************************
         SizeGroup - implement a minimal flexbox for libxputty
 ****************************************************************/
@@ -13,7 +21,7 @@ public:
     SizeGroup() = default;
 
     void setParent(Widget_t* p,int sx, int sy,
-                   int spx, int spy, int rackH) {
+            int spx, int spy, int rackH, int *_glowX, int *_glowY) {
 
         parent   = p;
         startX   = sx;
@@ -23,6 +31,8 @@ public:
         spacingX = spx;
         spacingY = spy;
         cellH    = rackH;
+        glowX = _glowX;
+        glowY = _glowY;
         entries.clear();
         tweens.clear();
         animateOnAdd = true;
@@ -31,6 +41,7 @@ public:
 
     void add(Widget_t* w) {
         entries.push_back(w);
+        to = (int) entries.size();
         relayout();
     }
 
@@ -52,13 +63,15 @@ public:
 
             t.t += dt * 6.0f;
             if (t.t > 1.0f) t.t = 1.0f;
-
             float s = t.t * t.t * (3.0f - 2.0f * t.t);
-            int x = t.x0 + (t.x1 - t.x0) * s;
-            int y = t.y0 + (t.y1 - t.y0) * s;
+            int x = t.x0;
+            int y = t.y0;
+            x = t.x0 + (t.x1 - t.x0) * s;
+            y = t.y0 + (t.y1 - t.y0) * s;
             os_move_window(dpy, t.w, x, y);
             if (t.t < 1.0f) anyActive = true;
         }
+
         if (!anyActive) tweensActive = false; 
     }
 
@@ -74,21 +87,26 @@ public:
         wmx = dragWidget->scale.init_x + mx - dragOffsetX;
         wmy = dragWidget->scale.init_y + my - dragOffsetY;
         os_move_window(parent->app->dpy, dragWidget, wmx, wmy);
+        lastInRow = 0;
+        auto it = std::find(entries.begin(), entries.end(), dragWidget);
+        oldIndex = it - entries.begin();
+        newIndex = findDropIndex(wmx, dragWidget->scale.init_y, oldIndex, lastInRow);
+        expose_widget(parent);
     }
 
     void endDrag(int mx, int my) {
         if (!dragWidget) return;
-        int newIndex = findDropIndex(wmx, wmy);
         auto it = std::find(entries.begin(), entries.end(), dragWidget);
-        int oldIndex = it - entries.begin();
-
         if (newIndex != oldIndex) {
+            if (oldIndex < newIndex && !lastInRow) newIndex--;
             entries.erase(it);
             entries.insert(entries.begin() + newIndex, dragWidget);
-            relayout();
         }
-
+        from = oldIndex < newIndex ? oldIndex : newIndex;
+        to = lastInRow;
+        relayout();
         dragWidget = nullptr;
+        (*glowX) = -1;
     }
 
 private:
@@ -101,11 +119,17 @@ private:
     int startX1 = 0, startY1 = 0;
     int spacingX = 0, spacingY = 0;
     int cellH = 0;
-    int spaceNextRox = 0;
     int dragOffsetX = 0;
     int dragOffsetY = 0;
     int wmx = 0;
     int wmy = 0;
+    int from = 0;
+    int to = 0;
+    int oldIndex = 0;
+    int newIndex = 0;
+    int lastInRow = 0;
+    int *glowX = nullptr;
+    int *glowY = nullptr;
 
     struct Tween {
         Widget_t* w;
@@ -120,6 +144,8 @@ private:
     void relayout() {
         if (!parent) return;
         Display* dpy = parent->app->dpy;
+        tweens.clear();
+        int index = 0;
 
         int maxX = parent->width;
         int x = startX;
@@ -127,19 +153,25 @@ private:
         int rowUnits = 1;
 
         for (Widget_t* w : entries) {
-            int units = (w->height + cellH - 1) / cellH;
-
             if (x + w->width > maxX && x != startX) {
-                x = startX + spaceNextRox;
+                x = startX ;
                 y += rowUnits * (cellH + spacingY);
                 rowUnits = 1;
-                spaceNextRox = 0;
             }
 
             if (animateOnAdd) {
                 int slideX = startX - w->width - 20;
-                tweens.push_back({ w, slideX, y, x, y, 0.0f });
-                os_move_window(dpy, w, slideX, y);
+                if (index >= from && index < to) {
+                    if (from == 0 && to == (int)entries.size()) { // initial animation
+                        tweens.push_back({ w, slideX, y, x, y, 0.0f });
+                    } else { // partial animation
+                        int oldX = w->scale.init_x;
+                        int oldY = w->scale.init_y;
+                        if (index == newIndex) { oldX = wmx; oldY = wmy;}
+                        tweens.push_back({ w, oldX, oldY, x, y, 0.0f });
+                    }
+                    os_move_window(dpy, w, slideX, y);
+                }
                 tweensActive = true; 
             } else {
                 os_move_window(dpy, w, x, y);
@@ -147,27 +179,32 @@ private:
 
             w->scale.init_x = x;
             w->scale.init_y = y;
-
             x += w->width + spacingX;
-
-            if (units > rowUnits)
-                spaceNextRox = x - spacingX;
-                //rowUnits = units;
+            index++;
         }
     }
 
-    int findDropIndex(int mx, int my) {
+    int findDropIndex(int mx, int my, int oldIndex, int& lastInRow) {
         int best = 0;
         int bestDist = 1e9;
 
         for (size_t i = 0; i < entries.size(); ++i) {
             auto* w = entries[i];
-            int cx = w->scale.init_x + w->width/2;
-            int cy = w->scale.init_y + w->height/2;
-            int dx = mx - cx;
-            int dy = my - cy;
-            int d = dx*dx + dy*dy;
-            if (d < bestDist) { best = i; bestDist = d; }
+            int cx = w->scale.init_x ;
+            if ((int)i >= oldIndex) cx += w->width + spacingX;
+            int cy = w->scale.init_y;
+            int dx = std::abs(mx - cx);
+            if (cy < my) continue;
+            if (cy == my && dx < bestDist) {
+                best = i;
+                bestDist = dx;
+                (*glowX) = cx - spacingX/2;
+                (*glowY) = my + spacingY/2;
+                }
+            if (cy > my) {
+                lastInRow = (int)i;
+                break;
+            }
         }
         return best;
     }
