@@ -23,6 +23,7 @@
 #include "DcBlocker.h"
 #include "LM_ACD18Filter.h"
 #include "Tone.h"
+#include "filters.h"
 
 
 #ifndef SAMPLEPLAYER_H
@@ -466,6 +467,7 @@ public:
     SampleVoice(double sr = 44100.0)
         : env(sr) {}
     KeyCache *rb = nullptr;
+    Filters filter;
     // Attack, Decay, Sustain, Release 
     void setADSR(float a, float d, float s, float r) {
         env.setParams(a, d, s, r);
@@ -474,46 +476,46 @@ public:
     void setSampleRate(double sr) {
         sampleRate = sr;
         env.setSampleRate(sr);
-        filterLP.setSampleRate(sr);
-        filterHP.setSampleRate(sr);
-        filterHP.highpass = true;
-        lfo.setFreq(0.4f, sr);
-        obf.setSampleRate(sr);
-        wasp.setSampleRate(sr);
+        filter.setSampleRate(sr);
         player.setSampleRate(sr);
     }
 
     float getEnvelopeLevel() { return env.getEnvelopeLevel(); }
 
-    void setAttack(float a) {env.setAttack(a);}
-    void setDecay(float d) {env.setDecay(d);}
-    void setSustain(float s) {env.setSustain(s);}
-    void setRelease(float r) {env.setRelease(r);}
-    void setPmFreq(float f) {player.pmFreq = f;}
-    void setPmDepth(float d) {player.pmDepthNorm = d;}
-    void setPmMode(int m) {player.setPmMode(m);}
-    void setvibDepth(float v) {player.vibDepth = v;}
-    void setvibRate(float r) {player.vibRate = r;}
-    void setOnOffVib(bool r) {player.vibonoff = r;}
-    void settremDepth(float t) {player.tremDepth = t;}
-    void settremRate(float r) {player.tremRate = r;}
-    void setOnOffTrem(bool r) {player.tremonoff = r;}
-    void setRootFreq(float freq_) {freq = freq_;}
+    void setAttack(float a)         { env.setAttack(a); }
+    void setDecay(float d)          { env.setDecay(d); }
+    void setSustain(float s)        { env.setSustain(s); }
+    void setRelease(float r)        { env.setRelease(r); }
+    void setPmFreq(float f)         { player.pmFreq = f; }
+    void setPmDepth(float d)        { player.pmDepthNorm = d; }
+    void setPmMode(int m)           { player.setPmMode(m); }
+    void setvibDepth(float v)       { player.vibDepth = v; }
+    void setvibRate(float r)        { player.vibRate = r; }
+    void setOnOffVib(bool r)        { player.vibonoff = r; }
+    void settremDepth(float t)      { player.tremDepth = t; }
+    void settremRate(float r)       { player.tremRate = r; }
+    void setOnOffTrem(bool r)       { player.tremonoff = r; }
+    void setRootFreq(float freq_)   { freq = freq_; }
 
-    void setCutoffWasp(float c) { wasp.setCutoff(c); }
-    void setResonanceWasp(float c) { wasp.setResonance(c); }
-    void setFilterMixWasp(float c) { wasp.setFilterMix(c); }
-    void setKeyTrackingWasp(float c) { wasp.setKeyTracking(c); }
+    void setCutoffWasp(float c)     { filter.wasp.setCutoff(c); }
+    void setResonanceWasp(float c)  { filter.wasp.setResonance(c); }
+    void setFilterMixWasp(float c)  { filter.wasp.setFilterMix(c); }
+    void setKeyTrackingWasp(float c){ filter.wasp.setKeyTracking(c); }
+    void setOnOffWasp(bool on)      { filter.wasp.setOnOff(on); }
 
-    void setCutoffObf(float c) {obf.setCutOff(c);}
-    void setResonanceObf(float r) {obf.setResonance(r);}
-    void setKeyTrackingObf(float k) {obf.setKeyTracking(k);}
-    void setModeObf(float m) {obf.setMode(m);}
-    void setOnOffObf(bool on) { obf.setOnOff(on); }
+    void setCutoffObf(float c)      { filter.obf.setCutOff(c); }
+    void setResonanceObf(float r)   { filter.obf.setResonance(r); }
+    void setKeyTrackingObf(float k) { filter.obf.setKeyTracking(k); }
+    void setModeObf(float m)        { filter.obf.setMode(m); }
+    void setOnOffObf(bool on)       { filter.obf.setOnOff(on); }
 
-    void setOnOffWasp(bool on) { wasp.setOnOff(on); }
 
-    void setAge(float v) { age = ageCurve(v); }
+    void setCutoffTB(float v)       { filter.tbfilter.setCutoff(v);}
+    void setResonanceTB(float v)    { filter.tbfilter.setResonance(v);}
+    void setVintageAmountTB(float v){ filter.tbfilter.setVintageAmount(v);}
+    void setTBOnOff(bool on)        { filter.tbfilter.setOnOff(on); }
+
+    void setAge(float v)            { age = ageCurve(v); }
 
     void setPitchWheel(float f) {
         float semitones = f * 2.0f;
@@ -524,48 +526,38 @@ public:
 
     void setCutoffLP(int value) {
         value = std::clamp(value, 0, 127);
-        filterLP.ccCutoff = value;
+        filter.filterLP.ccCutoff = value;
     }
 
     void setResoLP(int value) {
         value = std::clamp(value, 0, 127);
-        filterLP.ccReso   = value;
+        filter.filterLP.ccReso   = value;
     }
 
     void setOnOffLP(bool value) {
-        filterLP.targetOn = value;
-        if (value && !filterLP.filterOff) {
-            filterLP.recalcFilter(midiNote);
-            filterLP.reset();
-            filterLP.filterOff = true;
-        }
+        filter.filterLP.setOnOff(value);
     }
 
     void setCutoffHP(int value) {
         value = std::clamp(value, 0, 127);
-        filterHP.ccCutoff = value;
+        filter.filterHP.ccCutoff = value;
     }
 
     void setResoHP(int value) {
         value = std::clamp(value, 0, 127);
-        filterHP.ccReso   = value;
+        filter.filterHP.ccReso   = value;
     }
 
     void setOnOffHP(bool value) {
-        filterHP.targetOn = value;
-        if (value && !filterHP.filterOff) {
-            filterHP.recalcFilter(midiNote);
-            filterHP.reset();
-            filterHP.filterOff = true;
-        }
+        filter.filterHP.setOnOff(value);
     }
 
     void setLpKeyTracking(float amt) {
-        filterLP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
+        filter.filterLP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
     }
 
     void setHpKeyTracking(float amt) {
-        filterHP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
+        filter.filterHP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
     }
 
     inline float velocityCurve(float vel) {
@@ -591,6 +583,10 @@ public:
                 velComp = 1.0f;
                 break;
         }
+    }
+
+    void rebuildFilterChain(const std::vector<int>& order) {
+        filter.rebuildFilterChain(order);
     }
 
     void noteOn(int midiNote, float velocity,
@@ -622,14 +618,7 @@ public:
         player.setFrequency(midiToFreq(midiNote), rootFreq);
         player.setLoop(0, sampleData->data.size() - 1, looping);
         player.reset();
-
-        obf.recalcFilter(midiNote);
-        obf.reset();
-        wasp.setMidiNote(midiNote);
-        filterLP.recalcFilter(midiNote);
-        filterLP.reset();
-        filterHP.recalcFilter(midiNote);
-        filterHP.reset();
+        filter.noteOn(midiNote);
         env.noteOn();
     }
 
@@ -660,10 +649,9 @@ public:
         if (!env.isActive()) active = false;
         //out = vintageAgeWarp(out);
         //out = ageSlew(out);
-        //float lfo_ = lfo.process();
-        out = obf.process(out);
-        out = wasp.process(out);
-        return filterHP.process(filterLP.process(out));
+        out = filter.process(out);
+
+        return out;
     }
 
     void getAnalyseBuffer(float *abuf, int frames,
@@ -689,7 +677,7 @@ public:
         player.reset();
         player.processSave(duration, abuf);
         for (uint32_t i = 0; i < abuf.size(); i++) {
-            abuf[i] = filterHP.process(filterLP.process(abuf[i]));
+            abuf[i] = filter.process(abuf[i]);
         }
     }
 
@@ -698,11 +686,7 @@ public:
 private:
     SamplePlayer player;
     ADSR env;
-    LadderFilter filterLP;
-    ZDFLadderFilter filterHP;
-    LFO lfo;
-    SEMFilter obf;
-    WaspFilter wasp;
+
 
     bool active = false;
     double sampleRate = 44100.0f;
@@ -750,7 +734,7 @@ public:
     PolySynth() {}
     KeyCache rb;
 
-    void init(double sr, size_t maxVoices = 8) {
+    void init(double sr, size_t maxVoices = 48) {
         voices.clear();
         voices.reserve(maxVoices);
         for (size_t i = 0; i < maxVoices; ++i)
@@ -762,7 +746,6 @@ public:
         reverb.setSampleRate(sr);
         lim.setSampleRate(sr);
         dcblocker.setSampleRate(sr);
-        tbfilter.setSampleRate(sr);
         tone.setSampleRate(sr);
 
         for (auto& v : voices) {
@@ -772,24 +755,87 @@ public:
         }
     }
 
+    void rebuildMachineChain(const std::vector<int>& order) {
+        rb.rebuildMachineChain(order);
+    }
+
+    void rebuildFilterChain(const std::vector<int>& order) {
+        for (auto& v : voices)
+            v->rebuildFilterChain(order);
+    }
+
+    void resetFilter(int id) {
+        if (isDragFilterOn)
+        for (auto& v : voices) {
+            switch(id) {
+                case 8:  v->filter.tbfilter.setOnOff(isDragFilterOn); break;
+                case 9:  v->filter.wasp.setOnOff(isDragFilterOn) ; break;
+                case 10: v->filter.filterLP.setOnOff(isDragFilterOn) ; break;
+                case 11: v->filter.filterHP.setOnOff(isDragFilterOn); break;
+                case 12: v->filter.obf.setOnOff(isDragFilterOn); break;
+                default: break;
+            }
+        }
+        isDragFilterOn = false;
+    }
+
+    void setFilterOff(int id) {
+        switch(id) {
+            case 8:  isDragFilterOn = voices[0]->filter.tbfilter.getOnOff(); break;
+            case 9:  isDragFilterOn = voices[0]->filter.wasp.getOnOff(); break;
+            case 10: isDragFilterOn = voices[0]->filter.filterLP.getOnOff(); break;
+            case 11: isDragFilterOn = voices[0]->filter.filterHP.getOnOff(); break;
+            case 12: isDragFilterOn = voices[0]->filter.obf.getOnOff(); break;
+            default: break;
+        }
+        
+        for (auto& v : voices) {
+            switch(id) {
+                case 8: v->isActive() ?
+                    v->filter.tbfilter.setOnOff(false) :
+                    v->filter.tbfilter.dumpOff();
+                    break;
+                case 9: v->isActive() ?
+                    v->filter.wasp.setOnOff(false) :
+                    v->filter.wasp.dumpOff();
+                    break;
+                case 10: v->isActive() ?
+                    v->filter.filterLP.setOnOff(false) :
+                    v->filter.filterLP.dumpOff();
+                    break;
+                case 11: v->isActive() ?
+                    v->filter.filterHP.setOnOff(false) :
+                    v->filter.filterHP.dumpOff();
+                    break;
+                case 12: v->isActive() ?
+                    v->filter.obf.setOnOff(false) :
+                    v->filter.obf.dumpOff();
+                    break;
+                default: break;
+            }
+        }
+    }
+
+    void setReverse(int o) { rb.setReverse(intToBool(o)); }
+
     void setLoop(bool loop) {
         playLoop = loop;
         //rb.clear();
-        tbfilter.hardReset();
+        //tbfilter.hardReset();
     }
 
     void setLoopBank(const SampleBank* lbank) {
         loopBank = lbank;
         rb.setLoopRoot(loopBank->getSample(0));
         rb.makeLoop();
-        tbfilter.hardReset();
+        //tbfilter.hardReset();
     }
 
     void setBank(const SampleBank* sbank) {
         sampleBank = sbank;
         //rb.build(sampleBank->getSample(0), sampleRate);
         rb.setRoot(sampleBank->getSample(0));
-        tbfilter.hardReset();
+        //tbfilter.hardReset();
     }
 
     void getAnalyseBuffer(float *abuf, int frames) {
@@ -861,10 +907,10 @@ public:
     void setReverbOnOff(int v)  { reverb.setOnOff(intToBool(v)); }
     void setReverbRoomSize(float v) { reverb.setRoomSize(0.9f + v * (1.05f - 0.9f)); }
 
-    void setCutoffTB(float v) {tbfilter.setCutoff(v);}
-    void setResonanceTB(float v) {tbfilter.setResonance(v);}
-    void setVintageAmountTB(float v) {tbfilter.setVintageAmount(v);}
-    void setTBOnOff(int v)  { tbfilter.setOnOff(intToBool(v)); }
+    void setCutoffTB(float v) { updateAllVoices(&SampleVoice::setCutoffTB, v);}
+    void setResonanceTB(float v) { updateAllVoices(&SampleVoice::setResonanceTB, v);}
+    void setVintageAmountTB(float v) { updateAllVoices(&SampleVoice::setVintageAmountTB, v);}
+    void setTBOnOff(int v)  { updateAllVoices(&SampleVoice::setTBOnOff, intToBool(v)); }
 
     void setTone(float v) { tone.setTone(v); }
     void setAge(float v) { updateAllVoices(&SampleVoice::setAge, v); }
@@ -888,6 +934,9 @@ public:
 
     void setVFX_EPSOnOff(int o)  { rb.setVFX_EPSOnOff(intToBool(o)); }
     void setVFX_EPSDrive(float d)  { rb.setVFX_EPSDrive(d); }
+
+    void setTMOnOff(int o)  { rb.setTMOnOff(intToBool(o)); }
+    void setTMTime(float d)  { rb.setTMTime(d); }
     
     void rebuildKeyCache() { rb.rebuild(); }
 
@@ -927,7 +976,6 @@ public:
         }
 
         fRec0[0] = fSlow0 + 0.999 * fRec0[1];
-        mix = tbfilter.process(mix);
         mix = dcblocker.process(mix);
         mix = chorus.process(mix);
         mix = reverb.process(mix);
@@ -954,7 +1002,6 @@ private:
     Chorus chorus;
     Reverb reverb;
     DcBlocker dcblocker;
-    LM_ACD18Filter tbfilter;
     Baxandall tone;
 
     const SampleBank* sampleBank = nullptr;
@@ -964,6 +1011,7 @@ private:
     float gain = std::pow(1e+01, 0.05 * 0.0);
     float fRec0[2] = {0.0f};
     bool playLoop;
+    bool isDragFilterOn = false;
 };
 
 #endif

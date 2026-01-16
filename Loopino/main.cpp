@@ -26,6 +26,7 @@ Loopino ui;
 #include "jack.cc"
 #include "AlsaAudioOut.h"
 #include "AlsaMidiIn.h"
+#include "AlsaSeqMidiIn.h"
 
 AlsaRawMidiIn rawmidi;
 std::vector<AlsaMidiDevice> devices;
@@ -102,6 +103,7 @@ int main(int argc, char *argv[]){
 
     Xputty app;
     AlsaAudioOut out;
+    AlsaSeqMidiIn aseq;
     std::condition_variable Sync;
 
     main_init(&app);
@@ -132,6 +134,8 @@ int main(int argc, char *argv[]){
             devices = rawmidi.listAlsaRawMidiInputs();
             showMidiDeviceSelect();
         }
+    } else {
+        if (aseq.open(&ui)) aseq.start();
     }
 
     main_run(&app);
@@ -140,6 +144,7 @@ int main(int argc, char *argv[]){
 
     quitJack();
     rawmidi.stop();
+    aseq.stop();
     out.stop();
 
     main_quit(&app);

@@ -36,11 +36,31 @@ struct ZDFLadderFilter {
     float fadeGain = 0.0f;
     float fadeStep = 0.0f;
     bool  targetOn = false; 
+    int midiNote = 0;
 
     const float minFreq = 20.0;
     const float maxFreq = 20000.0;
     const float minQ = 0.6;
     const float maxQ = 10.0;
+
+    bool getOnOff() const { return filterOff; }
+
+    void dumpOff() {
+        targetOn = false;
+        recalcFilter(midiNote);
+        reset();
+        fadeGain = 0.0f;
+        filterOff = true;
+    }
+
+    void setOnOff(bool on) {
+        targetOn = on;
+        if (on && !filterOff) {
+            recalcFilter(midiNote);
+            reset();
+            filterOff = true;
+        }
+    }
 
     double ccToFreq(int v) const {
         double t = v / 127.0;
@@ -132,7 +152,8 @@ struct ZDFLadderFilter {
         return in * (1.0f - fadeGain) + hp * fadeGain;
     }
 
-    void recalcFilter(int midiNote) {
+    void recalcFilter(int midiNote_) {
+        midiNote = midiNote_;
         if (!filterOff) return;
 
         float baseCut = ccToFreq(ccCutoff);
@@ -168,6 +189,7 @@ struct LadderFilter {
     float fadeGain = 0.0f;
     float fadeStep = 0.0f;
     bool  targetOn = false; 
+    int midiNote = 0;
 
     double bias = 0.0;
     double biasCoeff = 0.00005; 
@@ -179,6 +201,25 @@ struct LadderFilter {
     const float maxFreq = 20000.0;
     const float minQ = 0.6;
     const float maxQ = 10.0;
+
+    bool getOnOff() const { return filterOff; }
+
+    void dumpOff() {
+        targetOn = false;
+        recalcFilter(midiNote);
+        reset();
+        fadeGain = 0.0f;
+        filterOff = true;
+    }
+
+    void setOnOff(bool on) {
+        targetOn = on;
+        if (on && !filterOff) {
+            recalcFilter(midiNote);
+            reset();
+            filterOff = true;
+        }
+    }
 
     double ccToFreq(int v) const {
         double t = v / 127.0;
@@ -261,7 +302,8 @@ struct LadderFilter {
         return input * (1.0f - fadeGain) + lp * fadeGain;
     }
 
-    void recalcFilter(int midiNote) {
+    void recalcFilter(int midiNote_) {
+        midiNote = midiNote_;
         if (!filterOff) return;
 
         float baseCut = ccToFreq(ccCutoff);

@@ -20,6 +20,7 @@
 class LM_ROM12 {
 public:
 
+    bool getOnOff() const { return onOff; }
     void setDrive(float d) { drive = d; }
 
     void setOnOff(bool on) {
@@ -29,8 +30,12 @@ public:
     void setSampleRate(double sr) {
     }
 
+    inline void processV(std::vector<float>& s) {
+        if (!onOff) return;
+        for (auto& x : s) x = process(x);
+    }
+
     float process(float x) {
-        if (!onOff) return x;
         x *= drive;
         x = interpolate(x);
         x = emuQuantize(x);

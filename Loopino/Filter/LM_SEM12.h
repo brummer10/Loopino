@@ -59,6 +59,15 @@ struct SEMFilter {
     void setKeyTracking(float k) { keytrack = k; }
     void setMode(float m) { mode = m; }
 
+    bool getOnOff() const { return onOff; }
+
+    void dumpOff() {
+        targetOn = false;
+        onOff = false;
+        reset();
+        fadeGain = 0.0f;
+    }
+
     void setOnOff(bool on) {
         targetOn = on;
         if (on && !onOff) {

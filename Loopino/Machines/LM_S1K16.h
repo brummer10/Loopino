@@ -20,6 +20,7 @@
 class LM_S1K16 {
 public:
 
+    bool getOnOff() const { return onOff; }
     void setDrive(float d) { drive = d; }
     void setWarmth(float w) { warmth  = (1.0f - exp(-w * 3.5f)) * 0.85f; }
     void setHfTilt(float h) { hfTilt = pow(h, 1.7f) * 1.2f;; }
@@ -34,8 +35,12 @@ public:
         
     }
 
+    inline void processV(std::vector<float>& s) {
+        if (!onOff) return;
+        for (auto& x : s) x = process(x);
+    }
+
     inline float process(float x) {
-        if (!onOff) return x;
         x *= drive;
         float fc = 18000.0f / fs;
         brick += fc * (x - brick);

@@ -34,10 +34,15 @@ struct Biquad {
 
 class Brickwall {
 public:
+    bool getOnOff() const { return true; }
     void setSampleRate(float samplerate) {
         makeLP(s1, samplerate*0.21f, samplerate, 0.54f);
         makeLP(s2, samplerate*0.23f, samplerate, 0.63f);
         makeLP(s3, samplerate*0.25f, samplerate, 0.78f);
+    }
+
+    inline void processV(std::vector<float>& s) {
+        for (auto& x : s) x = process(x);
     }
 
     inline float process(float x){

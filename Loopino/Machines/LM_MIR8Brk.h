@@ -19,6 +19,7 @@
 class LM_MIR8Brk {
 public:
 
+    bool getOnOff() const { return onOff; }
     void setCutOff(float c) { cutoff = c; }
     void setDrive(float d)  { drive = d; }
     void setAmount(float a){ amount = a; }
@@ -33,8 +34,12 @@ public:
         a = k; b = 1.f - k;
     }
 
+    inline void processV(std::vector<float>& s) {
+        if (!onOff) return;
+        for (auto& x : s) x = process(x);
+    }
+
     inline float process(float x) {
-        if (!onOff) return x;
         x *= drive;
         constexpr float mu = 255.f;
         float s = copysignf(1.f, x);

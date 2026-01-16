@@ -77,6 +77,8 @@ endif
 	HEADER_DIR := $(LIB_DIR)include/
 	RESOURCES := $(wildcard $(RESOURCES_DIR)*.png)
 
+	INCLUDES := -I. -I./Machines/ -I./Filter/ -I./Backends/ -I./GUI/
+
 	CLAP_DIR := ./Clap/
 	CLAP_INCLUDE := -I. -I./Clap/clap/ -I./Clap/
 	CLAP_SOURCES := $(CLAP_DIR)ClapPlug.cpp
@@ -91,7 +93,7 @@ ifeq ($(TARGET), Linux)
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
 	CXXFLAGS += -MMD -std=c++17 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
-	LDFLAGS += -I. -I./Machines/ -I./Filter/ -I./Backends/ -lm -pthread -lpthread -lstdc++ \
+	LDFLAGS += $(INCLUDES) -lm -pthread -lpthread -lstdc++ \
 	-I../rubberband/ -I../rubberband/rubberband/ -L. ../rubberband/lib/librubberband.$(STATIC_LIB_EXT) \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f `
 	ifneq ($(MACOS)$(WINDOWS),true)
@@ -107,7 +109,7 @@ else ifeq ($(TARGET), Windows)
 
 	CXXFLAGS += -MMD -std=c++17 -fPIC -DALVER=\"$(VER)\" $(CFLAGS)
 
-	LDFLAGS += -I. -I./Machines/ -I./Filter/ -I./Backends/ -lm -pthread -lpthread  $(PAWPAW_LFLAGS) \
+	LDFLAGS += $(INCLUDES) -lm -pthread -lpthread  $(PAWPAW_LFLAGS) \
 	`$(PKGCONFIG) --cflags --libs $(USEAPI) sndfile fftw3f ` \
 	-I../rubberband/ -I../rubberband/rubberband/ -L. ../rubberband/lib/librubberband.$(STATIC_LIB_EXT)
 
@@ -211,21 +213,21 @@ uninstall :
 	$(QUIET)rm -rf $(DESTDIR)$(CLAP_INSTAL_DIR)/$(NAME).clap
 	$(QUIET)rm -rf $(DESTDIR)$(VST2_INSTAL_DIR)/$(NAME)vst.$(LIB_EXT)
 
-$(NAME).clap: $(CLAP_SOURCES) Loopino_ui.h | info
+$(NAME).clap: $(CLAP_SOURCES) | info
 	@$(B_ECHO) "Compiling $(NAME).clap $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -o $(NAME).clap $(GUI_LDFLAGS) $(LDFLAGS)
+	$(QUIET)$(CXX) -MMD $(CXXFLAGS) -DPIC -shared $(CLAP_INCLUDE) $(CLAP_SOURCES) -o $(NAME).clap $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME).clap
 endif
 
-$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) Loopino_ui.h | info
+$(NAME)vst.$(LIB_EXT): $(VST2_SOURCES) | info
 	@$(B_ECHO) "Compiling $(NAME)vst.$(LIB_EXT) $(reset)"
-	$(QUIET)$(CXX) $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -o $(NAME)vst.$(LIB_EXT) $(GUI_LDFLAGS) $(LDFLAGS)
+	$(QUIET)$(CXX) -MMD $(CXXFLAGS) -DPIC -shared -Wno-multichar $(VST2_INCLUDE) $(VST2_SOURCES) -o $(NAME)vst.$(LIB_EXT) $(GUI_LDFLAGS) $(LDFLAGS)
 ifeq (,$(filter yes,$(DEBUG)))
 	$(QUIET)$(STRIP) -s -x -X -R .comment -R .note.ABI-tag $(NAME)vst.$(LIB_EXT)
 endif
 
-$(NAME) : $(OBJECTS) Loopino_ui.h | info
+$(NAME) : $(OBJECTS) | info
 ifeq ($(TARGET), Linux)
 	@$(B_ECHO) "Build $@ $(reset)"
 	$(QUIET)$(CXX) -MMD $(CXXFLAGS) $(OBJECTS) -o $(NAME)$(EXE) $(LDFLAGS) $(GUI_LDFLAGS)

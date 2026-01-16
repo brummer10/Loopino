@@ -26,11 +26,22 @@ public:
         update();
     }
 
+    bool getOnOff() const { return onoff; }
+
+    void dumpOff() {
+        targetOn = false;
+        onoff = false;
+        reset();
+        update();
+        fadeGain = 0.0f;
+    }
+
     void setOnOff(bool v) {
         targetOn = v;
         if (v && !onoff) {
-            hardReset();
             onoff = true;
+            reset();
+            update();
         }
     }
 
@@ -48,9 +59,20 @@ public:
         vintageAmount = std::clamp(v, 0.0f, 1.0f);
     }
 
-    void hardReset() {
+    void reset() {
         z1 = z2 = z3 = 0.0f;
+        bassDropEnv = 0.0f;
         driftPhase = 0.0f;
+        punchEnv = 1.0f;
+        prePunchEnv = 1.0f;
+    }
+
+    void noteOn(int midiNote) {
+        punchEnv = 1.0f;
+        prePunchEnv = 1.0f;
+        bassDropEnv = 0.0f;
+        noteHz =  440.0f * powf(2.0f, (midiNote - 69) / 12.0f);
+        update();
     }
 
     inline float process(float in) {
@@ -67,7 +89,9 @@ public:
         if (driftPhase > 1.0f) driftPhase -= 1.0f;
         float drift = std::sin(driftPhase * 2.0f * M_PI);
         float resDrift = 1.0f + drift * 0.03f * vintageAmount;
-        float x = preSaturate(in, vintageAmount);
+        prePunchEnv += 0.004f * (0.0f - prePunchEnv);
+        float punchDrive = 1.0f + prePunchEnv * 4.0f;
+        float x = preSaturate(in * punchDrive, vintageAmount);
         float fb = resonanceGain * resDrift * z3;
 
         x -= fb;
@@ -79,8 +103,10 @@ public:
         bassDropEnv += 0.0008f * (resActivity - bassDropEnv);
         float bassDrop = 1.0f - bassDropEnv * 0.35f;
         bassDrop = std::clamp(bassDrop, 0.65f, 1.0f);
-        float y = z3 * bassDrop;
-        float out = postSaturate(y);
+        punchEnv += 0.002f * (0.0f - punchEnv);
+        float punchGain = 1.0f + punchEnv * 1.4f;
+        float y = z3 * bassDrop * punchGain * 1.1f;
+        float out = tanh_fast(y * 1.6f) * 1.9f;
         return in * (1.0f - fadeGain) + out * fadeGain;
     }
 
@@ -94,9 +120,14 @@ private:
     float fadeStep = 0.0f;
     bool  targetOn = false;
     bool onoff = false;
+    float keyTrack = 0.08f;
+    float noteHz = 440.0f;
 
     float g = 0.0f;
     float resonanceGain = 0.0f;
+    float punchEnv = 0.0f;
+    float prePunchEnv = 0.0f;
+    float outLevel = 1.0f;
 
     float z1 = 0.0f, z2 = 0.0f, z3 = 0.0f;
 
@@ -104,7 +135,10 @@ private:
     float driftSpeed = 0.000002f;
 
     void update() {
-        float wc = 2.0f * M_PI * cutoff;
+        float keyLeak = 1.0f + (noteHz / 440.0f - 1.0f) * keyTrack;
+        float trackedCutoff = cutoff * keyLeak;
+        trackedCutoff = std::clamp(trackedCutoff, 30.0f, sampleRate * 0.45f);
+        float wc = 2.0f * M_PI * trackedCutoff;
         float T  = 1.0f / sampleRate;
 
         g = wc * T;

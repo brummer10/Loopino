@@ -89,7 +89,7 @@ public:
     }
 
     bool init(decltype(ui)* ui, uint32_t preferredRate = 48000,
-              uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 2) {
+              uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 3) {
         preferredPeriod = preferredPeriod_;
         uiPtr = ui;
         int err = snd_pcm_open(&pcm, deviceName.c_str(), SND_PCM_STREAM_PLAYBACK, 0);

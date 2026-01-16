@@ -65,26 +65,29 @@
         param.registerParam("Wasp CutOff","Wasp",40.0, 12000.0, 1000.0, 0.01,(void*)&waspcutoff,false, IS_FLOAT);
         param.registerParam("Wasp Keytracking","Wasp",0.0, 1.0, 0.5, 0.01,(void*)&waspkeytracking,false,IS_FLOAT);
         param.registerParam("TB On/Off", "LM_ACD18",0, 1, 0, 1,              (void*)&tbonoff,      true,  IS_INT);
-        param.registerParam("TB Vintage","LM_ACD18",0.0, 1.0, 0.3, 0.01,     (void*)&tbvintage,   false,  IS_FLOAT);
-        param.registerParam("TB Resonance","LM_ACD18",0.0, 1.0, 0.75, 0.01,  (void*)&tbresonance, false,  IS_FLOAT);
-        param.registerParam("TB CutOff","LM_ACD18",40.0, 12000.0, 5000.0, 0.01,(void*)&tbcutoff,  false,  IS_FLOAT);
-        param.registerParam("Tone",     "Synth", -1.0, 1.0, 0.0, 0.01,    (void*)&tone,           false,  IS_FLOAT);
+        param.registerParam("TB Vintage","LM_ACD18",0.0, 1.0, 0.3, 0.01,    (void*)&tbvintage,   false,   IS_FLOAT);
+        param.registerParam("TB Resonance","LM_ACD18",0.0, 1.0, 0.3, 0.01,  (void*)&tbresonance, false,   IS_FLOAT);
+        param.registerParam("TB CutOff","LM_ACD18",40.0, 12000.0, 880.0, 0.01,(void*)&tbcutoff,   false,  IS_FLOAT);
+        param.registerParam("Tone",     "Synth", -1.0, 1.0, 0.0, 0.01,       (void*)&tone,        false,  IS_FLOAT);
       //  param.registerParam("Age",      "Synth", 0.0, 1.0, 0.25, 0.01,    (void*)&age,          false,  IS_FLOAT);
-        param.registerParam("LM_MIR8 On/Off", "Machine",0, 1, 0, 1,        (void*)&mrgonoff,       true,  IS_INT);
-        param.registerParam("LM_MIR8 Drive","Machine",0.25, 1.5, 1.3, 0.01,(void*)&mrgdrive,      false,  IS_FLOAT);
-        param.registerParam("LM_MIR8 Amount","Machine",0.1, 1.0, 0.25, 0.01,(void*)&mrgamount,    false,  IS_FLOAT);
+        param.registerParam("LM_MIR8 On/Off", "Machine",0, 1, 0, 1,          (void*)&mrgonoff,     true,  IS_INT);
+        param.registerParam("LM_MIR8 Drive","Machine",0.25, 1.5, 1.3, 0.01,  (void*)&mrgdrive,    false,  IS_FLOAT);
+        param.registerParam("LM_MIR8 Amount","Machine",0.1, 1.0, 0.25, 0.01, (void*)&mrgamount,   false,  IS_FLOAT);
         param.registerParam("Emu_12 On/Off", "Machine",0, 1, 0, 1,           (void*)&emu_12onoff,  true,  IS_INT);
         param.registerParam("Emu_12 Drive","Machine",0.25, 2.5, 1.2, 0.01,   (void*)&emu_12drive, false,  IS_FLOAT);
         param.registerParam("Emu_12 Amount","Machine",0.1, 1.0, 1.0, 0.01,   (void*)&emu_12amount,false,  IS_FLOAT);
         param.registerParam("LM_CMP12 On/Off", "Machine",0, 1, 0, 1,         (void*)&cmp12onoff,   true,  IS_INT);
         param.registerParam("LM_CMP12 Drive","Machine",0.25, 2.5, 1.0, 0.01, (void*)&cmp12drive,  false,  IS_FLOAT);
         param.registerParam("LM_CMP12 Ratio","Machine",0.1, 1.0, 1.65, 0.01, (void*)&cmp12ratio,  false,  IS_FLOAT);
-        param.registerParam("Studio16 On/Off","Machine",0, 1, 0, 1,         (void*)&studio16onoff, true,  IS_INT);
-        param.registerParam("Studio16 Drive","Machine",0.25, 1.5, 1.1, 0.01,(void*)&studio16drive,false,  IS_FLOAT);
-        param.registerParam("Studio16 Warmth","Machine",0.0, 1.0, 0.65, 0.01,(void*)&studio16warmth,false, IS_FLOAT);
-        param.registerParam("Studio16 HfTilt","Machine",0.0, 1.0, 0.45, 0.01,(void*)&studio16hftilt,false, IS_FLOAT);
-        param.registerParam("EPS On/Off",     "Machine",0, 1, 0, 1,         (void*)&epsonoff,       true,  IS_INT);
-        param.registerParam("EPS Drive",      "Machine",0.25, 1.5, 1.0, 0.01,(void*)&epsdrive,     false,  IS_FLOAT);
+        param.registerParam("Studio16 On/Off","Machine",0, 1, 0, 1,          (void*)&studio16onoff, true, IS_INT);
+        param.registerParam("Studio16 Drive","Machine",0.25, 1.5, 1.1, 0.01, (void*)&studio16drive,false, IS_FLOAT);
+        param.registerParam("Studio16 Warmth","Machine",0.0, 1.0, 0.65, 0.01,(void*)&studio16warmth,false,IS_FLOAT);
+        param.registerParam("Studio16 HfTilt","Machine",0.0, 1.0, 0.45, 0.01,(void*)&studio16hftilt,false,IS_FLOAT);
+        param.registerParam("EPS On/Off",     "Machine",0, 1, 0, 1,          (void*)&epsonoff,      true, IS_INT);
+        param.registerParam("EPS Drive",      "Machine",0.25, 1.5, 1.0, 0.01,(void*)&epsdrive,     false, IS_FLOAT);
+        param.registerParam("Time On/Off",    "Machine",0, 1, 0, 1,          (void*)&tmonoff,       true, IS_INT);
+        param.registerParam("Time ",          "Machine",0.0, 1.0, 0.2, 0.01, (void*)&tmtime,       false, IS_FLOAT);
+        param.registerParam("Reverse",       "Machine",0, 1, 0, 1,           (void*)&reverse,       true, IS_INT);
     }
 
     void setValuesFromHost() {
@@ -162,6 +165,9 @@
             adj_set_value(Studio_16HfTilt->adj, studio16hftilt);
             adj_set_value(EPSOnOff->adj, (float)epsonoff);
             adj_set_value(EPSDrive->adj, epsdrive);
+            adj_set_value(TMOnOff->adj, (float)tmonoff);
+            adj_set_value(TMTime->adj, tmtime);
+            adj_set_value(Reverse->adj, (float)reverse);
 
             expose_widget(LpKeyTracking);
             expose_widget(HpKeyTracking);
@@ -240,6 +246,11 @@
         synth.setStudio_16HfTilt(studio16hftilt);
         synth.setVFX_EPSOnOff(epsonoff);
         synth.setVFX_EPSDrive(epsdrive);
+        synth.setTMOnOff(tmonoff);
+        synth.setTMTime(tmtime);
+        synth.setReverse(reverse);
+        synth.rebuildMachineChain(machineOrder);
+        synth.rebuildFilterChain(filterOrder);
     }
 
 #if defined (RUN_AS_PLUGIN)
@@ -281,6 +292,11 @@
             adj_set_max_value(wview->adj, (float)af.samplesize);
             adj_set_state(loopMark_L->adj, 0.0);
             adj_set_state(loopMark_R->adj,1.0);
+            std::vector<int> rackOrder;
+            rackOrder.reserve(filterOrder.size() + machineOrder.size());
+            rackOrder.insert(rackOrder.end(), filterOrder.begin(),  filterOrder.end());
+            rackOrder.insert(rackOrder.end(), machineOrder.begin(), machineOrder.end());
+            sz.applyPresetOrder(rackOrder);
             havePresetToLoad = false;
         }
         loadNew = true;
@@ -372,7 +388,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 14; // guard for future proof
+        header.version = 15; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -458,6 +474,14 @@
         out.write(&studio16hftilt, sizeof(studio16hftilt));
         out.write(&epsonoff, sizeof(epsonoff));
         out.write(&epsdrive, sizeof(epsdrive));
+        // since version 15
+        out.write(&tmonoff, sizeof(tmonoff));
+        out.write(&tmtime, sizeof(tmtime));
+        out.write(&reverse, sizeof(reverse));
+        for (auto x : filterOrder)
+            out.write(&x, sizeof(x));
+        for (auto x : machineOrder)
+            out.write(&x, sizeof(x));
 
         writeSamples(out, af.samples, af.samplesize);
         // since version 13
@@ -489,7 +513,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 14) {
+        if (header.version > 15) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -587,6 +611,15 @@
             in.read(&studio16hftilt, sizeof(studio16hftilt));
             in.read(&epsonoff, sizeof(epsonoff));
             in.read(&epsdrive, sizeof(epsdrive));
+        }
+        if (header.version > 14) {
+            in.read(&tmonoff, sizeof(tmonoff));
+            in.read(&tmtime, sizeof(tmtime));
+            in.read(&reverse, sizeof(reverse));
+            for (auto& x : filterOrder)
+                in.read(&x, sizeof(x));
+            for (auto& x : machineOrder)
+                in.read(&x, sizeof(x));
         }
 
         readSamples(in, af.samples, af.samplesize);

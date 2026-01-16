@@ -133,6 +133,7 @@ private:
 
 class LM_CMP12Dac {
 public:
+    bool getOnOff() const { return onOff; }
     void setRatio(float r) {
         sppre.ratio = r;
         sppost.ratio = r;
@@ -150,8 +151,12 @@ public:
         sppost.setSampleRate(sr);
     }
 
+    inline void processV(std::vector<float>& s) {
+        if (!onOff) return;
+        for (auto& x : s) x = process(x);
+    }
+
     inline float process(float x) {
-        if (!onOff) return x;
         x = sppre.process(x);
         x = spbrick.process(x);
         x = sppost.process(x);

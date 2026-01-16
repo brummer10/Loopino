@@ -33,6 +33,15 @@ public:
     void setKeyTracking(float amt) { keyTrack = amt; } // 0.0f, 1.0f
     void setMidiNote(float note) { midiNote = note; } // 0.0f, 127.0f
 
+    bool getOnOff() const { return onoff; }
+
+    void dumpOff() {
+        targetOn = false;
+        onoff = false;
+        reset();
+        fadeGain = 0.0f;
+    }
+
     void setOnOff(bool v) {
         targetOn = v;
         if (v && !onoff) {
@@ -46,6 +55,7 @@ public:
         s2.reset();
         s3.reset();
         s4.reset();
+        fbFilter.reset();
     }
 
     inline float process(float in) {

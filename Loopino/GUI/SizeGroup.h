@@ -8,10 +8,14 @@
  */
 
 /****************************************************************
-        SizeGroup - implement a minimal flexbox for libxputty
+      SizeGroup.h - implement a flex-box for libxputty
+                    to order child widgets in a grid
+                    with animated drag and drop support 
+                    and non animated preset switching
 ****************************************************************/
 
 #pragma once
+#include <unordered_map> // must stay above xwidgets.h for min/max symbol clashing
 #include "xwidgets.h"
 #include <vector>
 #include <cmath>
@@ -20,6 +24,7 @@ class SizeGroup {
 public:
     SizeGroup() = default;
 
+    // set the parent widget which act as a flex-box
     void setParent(Widget_t* p,int sx, int sy,
             int spx, int spy, int rackH, int *_glowX, int *_glowY) {
 
@@ -39,12 +44,14 @@ public:
         relayout();
     }
 
+    // add a widget to the flex-box
     void add(Widget_t* w) {
         entries.push_back(w);
         to = (int) entries.size();
         relayout();
     }
 
+    // load a setting without animation
     void relayoutNow() {
         animateOnAdd = false;
         startX = startX1;
@@ -52,7 +59,7 @@ public:
         relayout();
     }
 
-    // call from GUI idle loop (~60 fps)
+    // call from GUI idle loop (~60 fps) for animation
     void updateTweens(float dt) {
         if (!tweensActive || !parent) return;
         Display* dpy = parent->app->dpy;
@@ -75,6 +82,7 @@ public:
         if (!anyActive) tweensActive = false; 
     }
 
+    // register a widget for dragging
     void beginDrag(Widget_t* w, int mx, int my) {
         dragWidget = w;
         dragOffsetX = mx;
@@ -82,6 +90,7 @@ public:
         os_raise_widget(w);
     }
 
+    // move a widget and draw drop indicator on parent widget
     void dragMove(int mx, int my) {
         if (!dragWidget) return;
         wmx = dragWidget->scale.init_x + mx - dragOffsetX;
@@ -92,10 +101,13 @@ public:
         oldIndex = it - entries.begin();
         newIndex = findDropIndex(wmx, dragWidget->scale.init_y, oldIndex, lastInRow);
         expose_widget(parent);
+        //std::cout << "Index " << oldIndex << std::endl;
     }
 
-    void endDrag(int mx, int my) {
+    // drop a widget to new position, do animation for reorder
+    void endDrag(std::vector<int>& newOrder, int fm) {
         if (!dragWidget) return;
+        animateOnAdd = true;
         auto it = std::find(entries.begin(), entries.end(), dragWidget);
         if (newIndex != oldIndex) {
             if (oldIndex < newIndex && !lastInRow) newIndex--;
@@ -107,14 +119,65 @@ public:
         relayout();
         dragWidget = nullptr;
         (*glowX) = -1;
+        newOrder.clear();
+        //newOrder.push_back(0);
+        if (fm) { // machines
+            for (std::size_t i = 20; i < entries.size(); ++i) {
+                newOrder.push_back(entries[i]->data);
+            }
+        } else { // filters
+            for (std::size_t i = 8; i < 13; ++i) {
+                newOrder.push_back(entries[i]->data);
+            }
+        }
+      //  for (Widget_t* w : entries) {
+      //      if (w->data > 0) {
+      //          newOrder.push_back(w->data);
+      //      }
+      //  }
+    }
+
+    // machines from 20 - 25
+    // apply a preset order non animated
+    void applyPresetOrder(const std::vector<int>& presetOrder) {
+        std::vector<Widget_t*> fx;
+        fx.reserve(entries.size());
+
+        for (Widget_t* w : entries)
+            if (w && w->data > 0) fx.push_back(w);
+
+        if (fx.size() != presetOrder.size()) return;
+
+        std::unordered_map<int, Widget_t*> map;
+        for (Widget_t* w : fx) map[w->data] = w;
+
+        for (size_t i = 0; i < fx.size(); ++i)
+            fx[i] = map[presetOrder[i]];
+
+        size_t fxIndex = 0;
+        for (Widget_t*& w : entries)
+            if (w->data > 0) w = fx[fxIndex++];
+
+        relayoutNow();
     }
 
 private:
+
+    struct Tween {
+        Widget_t* w;
+        int x0,y0;
+        int x1,y1;
+        float t;
+    };
+
     Widget_t* parent = nullptr;
     Widget_t* dragWidget = nullptr;
     std::vector<Widget_t*> entries;
+    std::vector<Tween> tweens;
 
     bool tweensActive = false;
+    bool animateOnAdd = false;
+
     int startX = 0, startY = 0;
     int startX1 = 0, startY1 = 0;
     int spacingX = 0, spacingY = 0;
@@ -128,18 +191,9 @@ private:
     int oldIndex = 0;
     int newIndex = 0;
     int lastInRow = 0;
+
     int *glowX = nullptr;
     int *glowY = nullptr;
-
-    struct Tween {
-        Widget_t* w;
-        int x0,y0;
-        int x1,y1;
-        float t;
-    };
-
-    std::vector<Tween> tweens;
-    bool animateOnAdd = false;
 
     void relayout() {
         if (!parent) return;
@@ -161,7 +215,7 @@ private:
 
             if (animateOnAdd) {
                 int slideX = startX - w->width - 20;
-                if (index >= from && index < to) {
+                if (index >= from && index <= to) {
                     if (from == 0 && to == (int)entries.size()) { // initial animation
                         tweens.push_back({ w, slideX, y, x, y, 0.0f });
                     } else { // partial animation
@@ -170,7 +224,7 @@ private:
                         if (index == newIndex) { oldX = wmx; oldY = wmy;}
                         tweens.push_back({ w, oldX, oldY, x, y, 0.0f });
                     }
-                    os_move_window(dpy, w, slideX, y);
+                    if (!dragWidget) os_move_window(dpy, w, slideX, y);
                 }
                 tweensActive = true; 
             } else {
@@ -190,6 +244,7 @@ private:
 
         for (size_t i = 0; i < entries.size(); ++i) {
             auto* w = entries[i];
+            if (w->data == -1) continue; // fixed frame
             int cx = w->scale.init_x ;
             if ((int)i >= oldIndex) cx += w->width + spacingX;
             int cy = w->scale.init_y;
@@ -199,12 +254,13 @@ private:
                 best = i;
                 bestDist = dx;
                 (*glowX) = cx - spacingX/2;
-                (*glowY) = my + spacingY/2;
-                }
+                (*glowY) = my ;
+            }
             if (cy > my) {
                 lastInRow = (int)i;
                 break;
             }
+            lastInRow = (int)i;
         }
         return best;
     }

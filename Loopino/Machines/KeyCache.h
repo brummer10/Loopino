@@ -19,6 +19,7 @@
 #include <map>
 #include <memory>
 #include <atomic>
+#include <vector>
 #include <chrono>
 #include <thread>
 #include <queue>
@@ -37,10 +38,16 @@ public:
     Machines machines;
     Machines loopMachines;
 
+    void rebuildMachineChain(const std::vector<int>& order) {
+        loopMachines.rebuildChain(order);
+        if (machines.rebuildChain(order))
+            rebuild();
+    }
+
     void setLM_MIR8OnOff(bool on) {
         machines.mrg.setOnOff(on);
         loopMachines.mrg.setOnOff(on);
-        rebuild(); 
+        rebuild();
     }
     void setLM_MIR8Drive(float d) {
         machines.mrg.setDrive(d);
@@ -107,6 +114,21 @@ public:
         loopMachines.eps.setDrive(d);
     }
 
+    void setTMOnOff(bool on)  {
+        machines.tm.setOnOff(on);
+        loopMachines.tm.setOnOff(on);
+        rebuild();
+    }
+    void setTMTime(float d)  {
+        machines.tm.setTimeDial(d);
+        loopMachines.tm.setTimeDial(d);
+    }
+
+    void setReverse(bool const on) {
+        reverse = on;
+        rebuild();
+    }
+
     void rebuild() {
         if (!root) return;
         clear();
@@ -154,8 +176,7 @@ public:
         s->rootFreq = loop_cache->rootFreq;
         s->sourceRate = loop_cache->sourceRate;
         loopMachines.setSampleRate(s->sourceRate);
-        for(auto& x : s->data)
-            x = loopMachines.process(x);
+        loopMachines.process(s->data);
         loop = s;
     }
 
@@ -197,7 +218,7 @@ public:
         return it!=cache.end() ? it->second : nullptr;
     }
 
-    void request(int note) {
+    void request(int const note) {
         std::lock_guard<std::mutex> g(qm);
         if (pending.insert(note).second)
             jobs.push(note);
@@ -216,6 +237,8 @@ public:
         }
     }
 
+    int getKeyCacheState() { return jobs.size(); }
+
 private:
     static constexpr int CHUNK = 4096;
     static constexpr auto WORKER_YIELD = std::chrono::microseconds(250);
@@ -231,6 +254,7 @@ private:
     std::condition_variable cv;
     std::thread worker;
     std::atomic<bool> stop{false};
+    bool reverse = false;
 
     inline double midiToFreq(int midiNote) {
         return  440.0f * std::pow(2.0, (midiNote - 69 ) / 12.0);
@@ -310,9 +334,8 @@ private:
         s->sourceRate = root->sourceRate;
 
         machines.setSampleRate(root->sourceRate);
-        for(auto& x : s->data)
-            x = machines.process(x);
-
+        machines.process(s->data);
+        if (reverse) std::reverse(s->data.begin(), s->data.end());
         std::lock_guard<std::mutex> g(cacheMutex);
         cache[note] = s;
         {
