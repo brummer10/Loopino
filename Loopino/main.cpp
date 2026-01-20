@@ -102,6 +102,7 @@ int main(int argc, char *argv[]){
     int sampleRate = cmd.opts.sampleRate.value_or(48000);
 
     Xputty app;
+    JackBackend jb(&ui);
     AlsaAudioOut out;
     AlsaSeqMidiIn aseq;
     std::condition_variable Sync;
@@ -119,7 +120,7 @@ int main(int argc, char *argv[]){
     signal (SIGHUP, signal_handler);
     signal (SIGINT, signal_handler);
 
-    if (!startJack()) {
+    if (!jb.start()) {
         if (out.init(&ui, sampleRate, bufferSize)) out.start();
         if (!mididevice.empty()) {
             if (rawmidi.open(mididevice.data(), &ui)) {
@@ -142,7 +143,7 @@ int main(int argc, char *argv[]){
 
     ui.pa.stop();
 
-    quitJack();
+    jb.stop();
     rawmidi.stop();
     aseq.stop();
     out.stop();

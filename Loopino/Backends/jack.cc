@@ -6,11 +6,14 @@
  * Copyright (C) 2025 brummer <brummer@web.de>
  */
 
+#pragma once
+
 #include <jack/jack.h>
 #include <jack/thread.h>
 #include <jack/midiport.h>
 #include <cstdio>
 #include <cstring>
+
 
 /****************************************************************
         jack.cc   native jackd support for Loopino
@@ -18,48 +21,71 @@
         this file is meant to be included in main.
 ****************************************************************/
 
-jack_client_t *client;
-jack_port_t *midi_port;
-jack_port_t *in_port;
-jack_port_t *out_port;
-jack_port_t *out1_port;
-bool runProcess = false;
+struct JackBackend
+{
+    Loopino* ui;
 
-void jack_shutdown (void *arg) {
-    runProcess = false;
-    fprintf (stderr, "jack shutdown, exit now \n");
-    ui.onExit();
+    jack_client_t* client   = nullptr;
+    jack_port_t*   midi_port = nullptr;
+    jack_port_t*   in_port   = nullptr;
+    jack_port_t*   out_port  = nullptr;
+    jack_port_t*   out1_port = nullptr;
+
+    bool runProcess = false;
+
+    JackBackend(Loopino* ui_) : ui(ui_) {}
+
+    bool start();
+    void stop();
+
+    static int  process(jack_nframes_t nframes, void* arg);
+    static void shutdown(void* arg);
+    static int  xrun(void* arg);
+    static int  srate(jack_nframes_t samplerate, void* arg);
+    static int  buffersize(jack_nframes_t nframes, void* arg);
+
+    void processMidi(void* midi_input_port_buf);
+};
+
+void JackBackend::shutdown(void* arg) {
+    auto* jb = static_cast<JackBackend*>(arg);
+    jb->runProcess = false;
+    fprintf(stderr, "jack shutdown, exit now\n");
+    jb->ui->onExit();
 }
 
-int jack_xrun_callback(void *arg) {
-    ui.getXrun();
-    fprintf (stderr, "Xrun \r");
+int JackBackend::xrun(void* arg) {
+    auto* jb = static_cast<JackBackend*>(arg);
+    jb->ui->getXrun();
+    fprintf(stderr, "Xrun\r");
     return 0;
 }
 
-int jack_srate_callback(jack_nframes_t samplerate, void* arg) {
-    int prio = jack_client_real_time_priority(client);
+int JackBackend::srate(jack_nframes_t samplerate, void* arg) {
+    auto* jb = static_cast<JackBackend*>(arg);
+    int prio = jack_client_real_time_priority(jb->client);
     if (prio < 0) prio = 25;
-    fprintf (stderr, "Samplerate %iHz \n", samplerate);
-    ui.setJackSampleRate(samplerate);
+
+    fprintf(stderr, "Samplerate %iHz\n", samplerate);
+    jb->ui->setJackSampleRate(samplerate);
     return 0;
 }
 
-int jack_buffersize_callback(jack_nframes_t nframes, void* arg) {
-    fprintf (stderr, "Buffersize is %i samples \n", nframes);
+int JackBackend::buffersize(jack_nframes_t nframes, void* arg) {
+    fprintf(stderr, "Buffersize is %i samples\n", nframes);
     return 0;
 }
 
-void process_midi(void* midi_input_port_buf) {
+void JackBackend::processMidi(void* midi_input_port_buf) {
     jack_midi_event_t in_event;
     jack_nframes_t event_count = jack_midi_get_event_count(midi_input_port_buf);
-    MidiKeyboard* keys = (MidiKeyboard*)ui.keyboard->private_struct;
-    unsigned int i;
-    for (i = 0; i < event_count; i++) {
+    MidiKeyboard* keys = (MidiKeyboard*)ui->keyboard->private_struct;
+
+    for (unsigned int i = 0; i < event_count; i++) {
         jack_midi_event_get(&in_event, midi_input_port_buf, i);
         if ((in_event.buffer[0] & 0xf0) == 0xc0) {  // program change on any midi channel
             //fprintf(stderr,"program changed %i", (int)in_event.buffer[1]);
-            ui.loadPresetNum((int)in_event.buffer[1]);
+            ui->loadPresetNum((int)in_event.buffer[1]);
         } else if ((in_event.buffer[0] & 0xf0) == 0xb0) {   // controller
             if (in_event.buffer[1]== 120) { // engine mute by All Sound Off on any midi channel
                 //fprintf(stderr,"mute %i", (int)in_event.buffer[2]);
@@ -67,13 +93,13 @@ void process_midi(void* midi_input_port_buf) {
                         in_event.buffer[1]== 0)) { // bank change (LSB/MSB) on any midi channel
                 //fprintf(stderr,"bank changed %i", (int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 71) {
-                ui.synth.setResoLP((int)in_event.buffer[2]);
+                ui->synth.setResoLP((int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 74) {
-                ui.synth.setCutoffLP((int)in_event.buffer[2]);
+                ui->synth.setCutoffLP((int)in_event.buffer[2]);
             } else if (in_event.buffer[1] == 7) {    // CC7 Volume
                 constexpr float min_dB = -20.0f;
                 constexpr float max_dB =  12.0f;
-                ui.volume = min_dB + ((float)in_event.buffer[2] / 127.0f) * (max_dB - min_dB);
+                ui->volume = min_dB + ((float)in_event.buffer[2] / 127.0f) * (max_dB - min_dB);
             } else {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }
@@ -82,43 +108,44 @@ void process_midi(void* midi_input_port_buf) {
             int msb = in_event.buffer[2];
             int value14 = lsb | (msb << 7);  // 0...16383
             float pitchwheel = (value14 - 8192) * 0.00012207; // 1/8192.0f;
-            ui.synth.setPitchWheel(pitchwheel);
-            wheel_set_value(ui.PitchWheel, pitchwheel);
+            ui->synth.setPitchWheel(pitchwheel);
+            wheel_set_value(ui->PitchWheel, pitchwheel);
         } else if ((in_event.buffer[0] & 0xf0) == 0x90) {   // Note On
             int velocity = in_event.buffer[2];
             if (velocity < 1) {
-                ui.synth.noteOff((int)(in_event.buffer[1]));
+                ui->synth.noteOff((int)(in_event.buffer[1]));
                 set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], false);
             } else {
-                ui.synth.noteOn((int)(in_event.buffer[1]), (float)((float)velocity/127.0f));
+                ui->synth.noteOn((int)(in_event.buffer[1]), (float)((float)velocity/127.0f));
                 set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], true);
             }
             //fprintf(stderr,"Note On %i", (int)in_event.buffer[1]);
         }else if ((in_event.buffer[0] & 0xf0) == 0x80) {   // Note Off
             //fprintf(stderr,"Note Off %i", (int)in_event.buffer[1]);
-            ui.synth.noteOff((int)(in_event.buffer[1]));
+            ui->synth.noteOff((int)(in_event.buffer[1]));
             set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], false);
         }
     }
-
 }
 
-int jack_process(jack_nframes_t nframes, void *arg) {
-    if (!runProcess) return 0;
-    void *midi_in = jack_port_get_buffer (midi_port, nframes);
-    float *input = static_cast<float *>(jack_port_get_buffer (in_port, nframes));
-    float *output = static_cast<float *>(jack_port_get_buffer (out_port, nframes));
-    float *output1 = static_cast<float *>(jack_port_get_buffer (out1_port, nframes));
+int JackBackend::process(jack_nframes_t nframes, void* arg) {
+    auto* jb = static_cast<JackBackend*>(arg);
+    if (!jb->runProcess) return 0;
+
+    void* midi_in = jack_port_get_buffer(jb->midi_port, nframes);
+    float* input  = (float*)jack_port_get_buffer(jb->in_port, nframes);
+    float* output = (float*)jack_port_get_buffer(jb->out_port, nframes);
+    float* output1= (float*)jack_port_get_buffer(jb->out1_port, nframes);
 
     static float fRec0[2] = {0};
     static constexpr float THRESHOLD = 0.25f; // -12db
     static uint32_t r = 0;
     static bool rec = false;
 
-    process_midi(midi_in);
+    jb->processMidi(midi_in);
 
     float peak = 0.0f;
-    if (ui.record) {
+    if (jb->ui->record) {
         for (uint32_t i = 0; i < (uint32_t)nframes; i++) {
             float v = fabsf(input[i]);
             if (v > peak) peak = v;
@@ -127,104 +154,106 @@ int jack_process(jack_nframes_t nframes, void *arg) {
         if (peak > THRESHOLD) rec = true;
     }
 
-    if (ui.record && rec) {
-        ui.timer = 0;
+    if (jb->ui->record && rec) {
+        jb->ui->timer = 0;
         for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
-            ui.af.samples[r] = input[i];
+            jb->ui->af.samples[r] = input[i];
             r++;
-            ui.position++;
-            if (r > ui.af.samplesize) {
+            jb->ui->position++;
+            if (r > jb->ui->af.samplesize) {
                 r = 0;
-                ui.record = false;
+                jb->ui->record = false;
                 rec = false;
                 break;
             }
         }
     }
 
-    if (( ui.af.samplesize && ui.af.samples != nullptr) && ui.play && ui.ready) {
-        float fSlow0 = 0.0010000000000000009 * ui.gain;
+    if (( jb->ui->af.samplesize && jb->ui->af.samples != nullptr) && jb->ui->play && jb->ui->ready) {
+        float fSlow0 = 0.0010000000000000009 * jb->ui->gain;
         for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
-            if (ui.position > ui.loopPoint_r) {
+            if (jb->ui->position > jb->ui->loopPoint_r) {
                 for (; i < (uint32_t)nframes; i++) {
                     output[i] = 0.0f;
                     output1[i] = 0.0f;
                 }
-                ui.play = false;
+                jb->ui->play = false;
                 break;
             }
             fRec0[0] = fSlow0 + 0.999 * fRec0[1];
-            for (uint32_t c = 0; c < ui.af.channels; c++) {
+            for (uint32_t c = 0; c < jb->ui->af.channels; c++) {
                 if (!c) {
-                    output[i] = ui.af.samples[ui.position*ui.af.channels] * fRec0[0];
-                    if (ui.af.channels ==1) output1[i] = ui.af.samples[ui.position*ui.af.channels] * fRec0[0];
-                } else output1[i] = ui.af.samples[ui.position*ui.af.channels+c] * fRec0[0];
+                    output[i] = jb->ui->af.samples[jb->ui->position*jb->ui->af.channels] * fRec0[0];
+                    if (jb->ui->af.channels ==1) output1[i] = jb->ui->af.samples[jb->ui->position*jb->ui->af.channels] * fRec0[0];
+                } else output1[i] = jb->ui->af.samples[jb->ui->position*jb->ui->af.channels+c] * fRec0[0];
             }
             fRec0[1] = fRec0[0];
             // track play-head position
-            ui.position++;
+            jb->ui->position++;
         }
     } else {
         fRec0[1] = fRec0[0] = 0.0f;
-        ui.position = ui.loopPoint_l;
+        jb->ui->position = jb->ui->loopPoint_l;
         memset(output, 0.0, (uint32_t)nframes * sizeof(float));
         memset(output1, 0.0, (uint32_t)nframes * sizeof(float));
     }
+
     for (uint32_t i = 0; i<(uint32_t)nframes; i++) {
-        float out = ui.synth.process();
+        float out = jb->ui->synth.process();
         output[i] += out;
         output1[i] += out;
     }
-
     return 0;
 }
 
-bool startJack() {
+bool JackBackend::start() {
     char buffer[1024];
     auto fp = fmemopen(buffer, 1024, "w");
     if ( !fp ) { std::printf("error"); }
     auto old = stderr;
     stderr = fp;
 
-    if ((client = jack_client_open ("loopino", JackNoStartServer, NULL)) == 0) {
+    client = jack_client_open("loopino", JackNoStartServer, nullptr);
+
+    std::fclose(fp);
+    stderr = old;
+   
+    if (!client) {
         std::cout << "jack server not running trying ALSA " << std::endl;
         return false;
     }
-    std::fclose(fp);
-    stderr = old;
 
-    if (client) {
-        midi_port = jack_port_register(
-                       client, "in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
-        in_port = jack_port_register(
-                       client, "in_0", JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
-        out_port = jack_port_register(
-                       client, "out_0", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
-        out1_port = jack_port_register(
-                       client, "out_1", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    midi_port = jack_port_register(client, "in",
+        JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
+    in_port   = jack_port_register(client, "in_0",
+        JACK_DEFAULT_AUDIO_TYPE, JackPortIsInput, 0);
+    out_port  = jack_port_register(client, "out_0",
+        JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+    out1_port = jack_port_register(client, "out_1",
+        JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
 
-        jack_set_xrun_callback(client, jack_xrun_callback, 0);
-        jack_set_sample_rate_callback(client, jack_srate_callback, 0);
-        jack_set_buffer_size_callback(client, jack_buffersize_callback, 0);
-        jack_set_process_callback(client, jack_process, 0);
-        jack_on_shutdown (client, jack_shutdown, 0);
+    jack_set_process_callback(client, process, this);
+    jack_set_xrun_callback(client, xrun, this);
+    jack_set_sample_rate_callback(client, srate, this);
+    jack_set_buffer_size_callback(client, buffersize, this);
+    jack_on_shutdown(client, shutdown, this);
 
-        if (jack_activate (client)) {
-            fprintf (stderr, "cannot activate client");
-            return false;
-        }
-
-        if (!jack_is_realtime(client)) {
-            fprintf (stderr, "jack isn't running with realtime priority\n");
-        } else {
-            fprintf (stderr, "jack running with realtime priority\n");
-        }
-        runProcess = true;
+    if (jack_activate (client)) {
+        fprintf (stderr, "cannot activate client");
+        return false;
     }
+
+    if (!jack_is_realtime(client)) {
+        fprintf (stderr, "jack isn't running with realtime priority\n");
+    } else {
+        fprintf (stderr, "jack running with realtime priority\n");
+    }
+
+    runProcess = true;
     return true;
 }
 
-void quitJack() {
+void JackBackend::stop() {
     runProcess = false;
     if (client) {
         if (jack_port_connected(midi_port)) {

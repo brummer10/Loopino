@@ -143,6 +143,7 @@ public:
     bool ready;
     bool havePresetToLoad;
     bool record;
+    float fRec0[2] = {0};
 
     Loopino() : af() {
         sampleData = std::make_shared<SampleInfo>();
@@ -188,6 +189,7 @@ public:
 
         useLoop = 0;
         xruns = 0;
+        xrunsCount = 0;
         timer = 30;
         generateKeys();
         guiIsCreated = false;
@@ -327,7 +329,7 @@ public:
         w_top->func.dnd_notify_callback = dnd_load_response;
         w_top->func.resize_notify_callback = resize_callback;
         commonWidgetSettings(w_top);
-        os_set_window_min_size(w_top, WINDOW_WIDTH, 390, WINDOW_WIDTH, WINDOW_HEIGHT);
+        os_set_window_min_size(w_top, WINDOW_WIDTH, WINDOW_HEIGHT- 130, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // sample view
         w = create_widget(app, w_top, 0, 0, 484, 140);
@@ -389,48 +391,49 @@ public:
         Controls = create_widget(app, w_top, 0, 140, WINDOW_WIDTH, WINDOW_HEIGHT - 140 - 80);
         Controls->parent = w_top;
         Controls->scale.gravity = WESTEAST;
+        Controls->func.configure_notify_callback = configure_callback;
         Controls->func.expose_callback = draw_window_box;
         commonWidgetSettings(Controls);
         sz.setParent(Controls, 10, 10, 5, 10, 75 * app->hdpi, &glowDragX, &glowDragY);
         Widget_t* frame = nullptr;
 
         sz.add(frame = add_frame(Controls, "Sample Buffer", 0, 0, 285, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addSampleBufferControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Phase Modulator", 0, 0, 175, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addPhaseModulatorControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Loop Buffer", 0, 0, 168, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addLoopBufferControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Sharp", 0, 0, 100, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addSharpControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Tone", 0, 0, 63, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addToneControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Gain", 0, 0, 63, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -438,7 +441,7 @@ public:
 
         #ifndef RUN_AS_PLUGIN
         sz.add(frame = add_frame(Controls, "Exit", 0, 0, 63, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -446,7 +449,7 @@ public:
         #endif
         /*
         frame = add_frame(Controls, "Age", 808+86, 10, 62, 75);
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
 
@@ -459,14 +462,14 @@ public:
         */
 
         sz.add(frame = add_frame(Controls, "Frequency", 0, 0, 91, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addFreqControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Acid-18 Filter", 0, 0, 170, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 8;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -474,7 +477,7 @@ public:
         addAcidControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Wasp Filter", 0, 0, 184, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 9;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -482,7 +485,7 @@ public:
         addWaspControlls(frame);
 
         sz.add(frame = add_frame(Controls, "LP Ladder Filter", 0, 0, 147, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 10;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -490,7 +493,7 @@ public:
         addLPLadderControlls(frame);
 
         sz.add(frame = add_frame(Controls, "HP Ladder Filter", 0, 0, 147, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 11;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -498,7 +501,7 @@ public:
         addHPLadderControlls(frame);
 
         sz.add(frame = add_frame(Controls, "SEM12 Filter", 0, 0, 184, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 12;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -507,41 +510,41 @@ public:
 
         Widget_t *eframe = nullptr;
         sz.add(eframe = add_frame(Controls, "Envelope", 0, 0, 178, 75));
-        eframe->scale.gravity = ASPECT;
+        eframe->scale.gravity = CENTER;
         eframe->data = -1;
         eframe->func.expose_callback = draw_frame;
         commonWidgetSettings(eframe);
 
         sz.add(frame = add_frame(Controls, "Dynamic", 0, 0, 83, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addDynamicControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Vibrato", 0, 0, 130, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addVibratoControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Tremolo",0, 0, 130, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addTremoloControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Chorus",0, 0, 205, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         addChorusControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Reverb",0, 0, 165, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -556,7 +559,7 @@ public:
         PitchWheel->func.value_changed_callback = wheel_callback;
 
         sz.add(frame = add_frame(Controls, "ADSR", 0, 0, 178, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = -1;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -564,7 +567,7 @@ public:
         addEnvelopeControlls(eframe);
 
         sz.add(frame = add_frame(Controls, "8-bit Machine",0, 0, 130, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 20;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -572,7 +575,7 @@ public:
         add8bitControlls(frame);
 
         sz.add(frame = add_frame(Controls, "12-bit Machine",0, 0, 130, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 21;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -580,7 +583,7 @@ public:
         add12bitControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Pump Machine",0, 0, 130, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 22;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -588,7 +591,7 @@ public:
         addPumpControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Studio-16 Machine",0, 0, 170, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 23;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -596,7 +599,7 @@ public:
         addStudio16Controllse(frame);
 
         sz.add(frame = add_frame(Controls, "Vintage",0, 0, 90, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 24;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
@@ -604,12 +607,14 @@ public:
         addTimeControlls(frame);
 
         sz.add(frame = add_frame(Controls, "Smooth",0, 0, 90, 75));
-        frame->scale.gravity = ASPECT;
+        frame->scale.gravity = CENTER;
         frame->data = 25;
         frame->func.expose_callback = draw_frame;
         commonWidgetSettings(frame);
         setFrameCallbacks(frame);
         addSmoothControlls(frame);
+
+        sz.layoutOnce();
 
         keyboard = add_midi_keyboard(w_top, "Organ", 0, WINDOW_HEIGHT - 80, WINDOW_WIDTH, 80);
         keyboard->flags |= HIDE_ON_DELETE;
@@ -634,7 +639,6 @@ public:
         createPrestList();
         guiIsCreated = true;
         setValuesFromHost();
-        //sz.applyPresetOrder(machineOrder);
     }
 
 private:
@@ -732,6 +736,7 @@ private:
     int useLoop;
     int reverse;
     int xruns;
+    int xrunsCount;
     int pressMark = 0;
     int LMark = 0;
     
@@ -1372,6 +1377,8 @@ private:
             expose_widget(playbutton);
         }
         sz.updateTweens(1.0f / 60.0f);
+        if (sz.resizeTimeOut > 0) sz.resizeTimeOut--;
+        if (sz.resizeTimeOut == 1) sz.relayoutNow();
         if (synth.rb.getKeyCacheState())
             expose_widget(Controls);
         #ifndef RUN_AS_PLUGIN
@@ -1390,7 +1397,10 @@ private:
         expose_widget(wview);
         expose_widget(Volume);
         #ifndef RUN_AS_PLUGIN
-        if(xruns) expose_widget(Controls);
+        if(xruns != xrunsCount) {
+            expose_widget(Controls);
+            xrunsCount = xruns;
+        }
         #endif
 
         #if defined(__linux__) || defined(__FreeBSD__) || \
@@ -1810,10 +1820,12 @@ private:
         Frequency = add_valuedisplay(frame, _(" Hz"), 10, 15, 66, 25);
         set_adjustment(Frequency->adj, 440.0, 440.0, 220.0, 880.0, 0.1, CL_CONTINUOS);
         commonWidgetSettings(Frequency);
+        Frequency->func.expose_callback = draw_valuedisplay;
         connectValueChanged(Frequency, &Loopino::frequency, 4, "Synth Root Frequency", nullptr,
             [](Loopino* self, float v) {self->synth.setRootFreq(v);});
 
-        RootKey = add_combobox(frame, "", 10, 40, 66, 25);
+        RootKey = add_combobox(frame, "", 10, 42, 66, 25);
+        RootKey->scale.gravity = ASPECT;
         commonWidgetSettings(RootKey);
         for (auto & element : keys) {
             combobox_add_entry(RootKey, element.c_str());
@@ -1824,8 +1836,6 @@ private:
         add_tooltip(RootKey, "Set Sample Root Key ");
         combobox_set_menu_size(RootKey, 12);
         combobox_set_active_entry(RootKey, rootkey);
-
-
     }
 
     void addAcidControlls(Widget_t *frame) {
@@ -2396,14 +2406,14 @@ private:
             self->setLoopToBank();
     }
 
-    // Root Key
+    // Root Key for save wav file
     static void set_root_key(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         self->saveRootkey = static_cast<uint8_t>(adj_get_value(w->adj));
     }
 
-    // Custom Root Key
+    // Custom Root Key for one shoot sample
     static void set_custom_root_key(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -2424,7 +2434,7 @@ private:
         }
     }
 
-    // clip
+    // clip sample buffer to clip marks
     static void button_clip_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -2433,7 +2443,7 @@ private:
         }
     }
 
-    // playbutton
+    // play button
     static void button_playbutton_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -2442,7 +2452,7 @@ private:
         } else self->play = false;
     }
 
-    // playbutton
+    // record button
     static void button_record_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -2452,7 +2462,7 @@ private:
         } else self->record = false;
     }
 
-    // playbutton
+    // use one shoot sample reverse
     static void reverse_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
@@ -2589,10 +2599,17 @@ private:
         Widget_t *w = (Widget_t*)w_;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
         float st = adj_get_state(self->loopMark_L->adj_x);
-        int width = self->w->width-40;
+        int width = self->w->width-36;
         os_move_window(w->app->dpy, self->loopMark_L, 15+ (width * st), 2);
         st = adj_get_state(self->loopMark_R->adj_x);
         os_move_window(w->app->dpy, self->loopMark_R, 15+ (width * st), 2);
+    }
+
+    // inform SizeGroup about window resize
+    static void configure_callback(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->sz.onParentResize();
     }
 
     // set playhead position to mouse pointer
@@ -2777,9 +2794,9 @@ private:
     void set_custom_theme(Xputty *app) {
         app->color_scheme->normal = (Colors) {
             /* cairo / r / g / b / a */
-            .fg     = { 0.878, 0.878, 0.878, 1.000 }, // heller Text
-            .bg     = { UI_PANEL }, // Hintergrund
-            .base   = { 0.125, 0.125, 0.125, 1.000 }, // Panel / Widget
+            .fg     = { 0.878, 0.878, 0.878, 1.000 },
+            .bg     = { UI_PANEL },
+            .base   = { 0.125, 0.125, 0.125, 1.000 },
             .text   = { UI_TEXT },
             .shadow = { 0.000, 0.000, 0.000, 0.300 },
             .frame  = { 0.188, 0.188, 0.188, 1.000 },
@@ -2787,9 +2804,9 @@ private:
         };
 
         app->color_scheme->prelight = (Colors) {
-            .fg     = { 0.900, 0.900, 0.900, 1.000 }, // Text bei Hover
-            .bg     = { 0.250, 0.250, 0.250, 1.000 }, // leicht angehoben
-            .base   = { 0.302, 0.714, 0.675, 1.000 }, // Akzentfarbe (Türkisgrün)
+            .fg     = { 0.900, 0.900, 0.900, 1.000 },
+            .bg     = { 0.250, 0.250, 0.250, 1.000 },
+            .base   = { 0.302, 0.714, 0.675, 1.000 },
             .text   = { 1.000, 1.000, 1.000, 1.000 },
             .shadow = { 0.302, 0.714, 0.675, 0.300 },
             .frame  = { 0.400, 0.820, 0.765, 1.000 },
@@ -2799,7 +2816,7 @@ private:
         app->color_scheme->selected = (Colors) {
             .fg     = { 0.950, 0.950, 0.950, 1.000 },
             .bg     = { 0.094, 0.094, 0.094, 1.000 },
-            .base   = { 0.506, 0.780, 0.518, 1.000 }, // sanftes Grün für Selektion
+            .base   = { 0.506, 0.780, 0.518, 1.000 },
             .text   = { 1.000, 1.000, 1.000, 1.000 },
             .shadow = { 0.506, 0.780, 0.518, 0.300 },
             .frame  = { 0.506, 0.780, 0.518, 1.000 },
@@ -2807,7 +2824,7 @@ private:
         };
 
         app->color_scheme->active = (Colors) {
-            .fg     = { 0.000, 0.737, 0.831, 1.000 }, // Cyan-Aktivfarbe
+            .fg     = { 0.000, 0.737, 0.831, 1.000 },
             .bg     = { 0.000, 0.000, 0.000, 1.000 },
             .base   = { 0.180, 0.380, 0.380, 1.000 },
             .text   = { 0.800, 0.800, 0.800, 1.000 },
@@ -2897,6 +2914,8 @@ private:
         int height_t = metrics.height;
         Loopino *self = static_cast<Loopino*>(w->parent_struct);
 
+        use_bg_color_scheme(w, NORMAL_);
+        cairo_paint (w->crb);
         cairo_text_extents_t extents;
         //use_text_color_scheme(w, get_color_state(w));
         cairo_set_font_size (w->crb, w->app->normal_font/w->scale.ascale);
@@ -2998,6 +3017,9 @@ private:
         const double radius = min(knob_x-pointer_off, knob_y-pointer_off) / 2;
 
         const double add_angle = 90 * (M_PI / 180.);
+        cairo_set_source_rgba(w->crb, UI_FRAME);
+        cairo_paint(w->crb);
+
         // base frame
         setFrameColour(w, w->crb, 0, 0, width, height);
         cairo_set_line_width(w->crb,  2.0/w->scale.ascale);
@@ -3345,41 +3367,32 @@ private:
         Widget_t * menu = w->childlist->childs[1];
         Widget_t* view_port =  menu->childlist->childs[0];
         ComboBox_t *comboboxlist = (ComboBox_t*)view_port->parent_struct;
+        cairo_set_source_rgba(w->crb, UI_FRAME);
+        cairo_paint(w->crb);
 
         cairo_rectangle(w->crb,2.0, 2.0, width, height);
+        cairo_set_line_width(w->crb, 1.0);
 
         if(w->state==0) {
-            cairo_set_line_width(w->crb, 1.0);
             use_shadow_color_scheme(w, NORMAL_);
             cairo_fill_preserve(w->crb);
-            use_frame_color_scheme(w, NORMAL_);
         } else if(w->state==1) {
             use_shadow_color_scheme(w, PRELIGHT_);
             cairo_fill_preserve(w->crb);
             cairo_set_line_width(w->crb, 1.5);
-            use_frame_color_scheme(w, NORMAL_);
         } else if(w->state==2) {
             use_shadow_color_scheme(w, SELECTED_);
             cairo_fill_preserve(w->crb);
-            cairo_set_line_width(w->crb, 1.0);
-            use_frame_color_scheme(w, SELECTED_);
         } else if(w->state==3) {
             use_shadow_color_scheme(w, ACTIVE_);
             cairo_fill_preserve(w->crb);
-            cairo_set_line_width(w->crb, 1.0);
-            use_frame_color_scheme(w, ACTIVE_);
         } else if(w->state==4) {
             use_shadow_color_scheme(w, INSENSITIVE_);
             cairo_fill_preserve(w->crb);
-            cairo_set_line_width(w->crb, 1.0);
-            use_frame_color_scheme(w, INSENSITIVE_);
         }
+        setFrameColour(w, w->crb,2.0, 2.0, width, height);
         cairo_stroke(w->crb);
 
-        cairo_rectangle(w->crb,4.0, 4.0, width, height);
-        cairo_stroke(w->crb);
-        cairo_rectangle(w->crb,3.0, 3.0, width, height);
-        cairo_stroke(w->crb);
         if (comboboxlist->list_size<1) return;
         if (vl<0) return;
 
@@ -3393,6 +3406,61 @@ private:
 
         cairo_move_to (w->crb, 15, (height+h)*0.55);
         cairo_show_text(w->crb, comboboxlist->list_names[vl]);
+        cairo_new_path (w->crb);
+    }
+
+    static void draw_valuedisplay(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        if (!w) return;
+        Metrics_t metrics;
+        os_get_window_metrics(w, &metrics);
+        int width = metrics.width-2;
+        int height = metrics.height-2;
+        if (!metrics.visible) return;
+
+        cairo_rectangle(w->crb,2.0, 2.0, width, height);
+        cairo_set_line_width(w->crb, 1.0);
+
+        if(w->state==0) {
+            use_shadow_color_scheme(w, NORMAL_);
+            cairo_fill_preserve(w->crb);
+        } else if(w->state==1) {
+            use_shadow_color_scheme(w, PRELIGHT_);
+            cairo_fill_preserve(w->crb);
+            cairo_set_line_width(w->crb, 1.5);
+        } else if(w->state==2) {
+            use_shadow_color_scheme(w, SELECTED_);
+            cairo_fill_preserve(w->crb);
+        } else if(w->state==3) {
+            use_shadow_color_scheme(w, ACTIVE_);
+            cairo_fill_preserve(w->crb);
+        } else if(w->state==4) {
+            use_shadow_color_scheme(w, INSENSITIVE_);
+            cairo_fill_preserve(w->crb);
+        }
+        setFrameColour(w, w->crb,2.0, 2.0, width, height);
+        cairo_stroke(w->crb);
+
+        cairo_text_extents_t extents;
+
+        char s[64];
+        const char* format[] = {"%.1f", "%.2f", "%.3f"};
+        float value = adj_get_value(w->adj);
+        if (fabs(w->adj->step)>0.99) {
+            snprintf(s, 63,"%d",  (int) value);
+        } else if (fabs(w->adj->step)>0.09) {
+            snprintf(s, 63, format[1-1], value);
+        } else {
+            snprintf(s, 63, format[2-1], value);
+        }
+        if(strlen(w->label)) memcpy(s + strlen(s), w->label, strlen(w->label) + 1);
+
+        use_text_color_scheme(w, get_color_state(w));
+        float font_size = w->app->normal_font/w->scale.ascale;
+        cairo_set_font_size (w->crb, font_size);
+        cairo_text_extents(w->crb,s , &extents);
+        cairo_move_to (w->crb, (width-extents.width)*0.5, (height+extents.height)*0.55);
+        cairo_show_text(w->crb, s);
         cairo_new_path (w->crb);
     }
 
@@ -3497,7 +3565,9 @@ static void draw_my_vswitch(void *w_, void* user_data) {
     const int offset = w * 0.21;
 
     cairo_push_group (wid->crb);
-    
+    cairo_set_source_rgba(wid->crb, UI_FRAME);
+    cairo_paint(wid->crb);
+
     self->roundrec(wid->crb, x+1, y+1, w-2, h-2, centerW);
     self->knobShadowOutset(wid->crb, w  , h, x, y);
     cairo_stroke_preserve (wid->crb);
