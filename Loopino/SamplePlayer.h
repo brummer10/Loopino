@@ -511,7 +511,6 @@ public:
         filter.obf.setOnOff(on);
     }
 
-
     void setCutoffTB(float v)       { filter.tbfilter.setCutoff(v);}
     void setResonanceTB(float v)    { filter.tbfilter.setResonance(v);}
     void setVintageAmountTB(float v){ filter.tbfilter.setVintageAmount(v);}

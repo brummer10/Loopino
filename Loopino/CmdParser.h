@@ -33,12 +33,20 @@ struct CmdParser {
 
     void printUsage(const char* progName) {
         std::cout
+
+            << ".____                        .__              \n" 
+            << "|    |    ____   ____ ______ |__| ____   ____  \n"
+            << "|    |   /  _ \\ /  _ \\\\____ \\|  |/    \\ /  _ \\ \n"
+            << "|    |__(  <_> |  <_> )  |_> >  |   |  (  <_> )\n"
+            << "|_______ \\____/ \\____/|   __/|__|___|  /\\____/ \n"
+            << "        \\/            |__|           \\/        \n"
+
             << "Usage: " << progName << " [options]\n"
             << "Options:\n"
-            << "  -d, --device <name>    MIDI device eg. hw:1,0,0\n"
-            << "  -s, --scaling <value>  Scaling factor (float)\n"
+            << "  -d, --device <name>    ALSA RAW MIDI device eg. hw:1,0,0\n"
             << "  -b, --buffer <value>   ALSA buffer size (int)\n"
-            << "  -r, --rate <value>     ALSA Sample Rate (int)\n";
+            << "  -r, --rate <value>     ALSA Sample Rate (int)\n"
+            << "  -s, --scaling <value>  Scaling factor (float)\n";
     }
 
     static bool parseFloat(const char* str, float& out) {

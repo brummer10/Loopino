@@ -1349,7 +1349,7 @@ private:
         if (ready) adj_set_value(wview->adj, (float) position);
         else {
             waitOne++;
-            if (waitOne > 2) {
+            if (waitOne > 4) {
                 transparent_draw(wview, nullptr);
                 transparent_draw(loopview, nullptr);
                 waitOne = 0;
