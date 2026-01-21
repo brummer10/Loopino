@@ -14,14 +14,10 @@
 #include <algorithm>
 #include <random>
 
-#include "LM_SEM12.h"
-#include "WaspFilter.h"
-#include "LadderFilter.h"
 #include "Limiter.h"
 #include "Chorus.h"
 #include "Reverb.h"
 #include "DcBlocker.h"
-#include "LM_ACD18Filter.h"
 #include "Tone.h"
 #include "filters.h"
 
@@ -501,19 +497,28 @@ public:
     void setResonanceWasp(float c)  { filter.wasp.setResonance(c); }
     void setFilterMixWasp(float c)  { filter.wasp.setFilterMix(c); }
     void setKeyTrackingWasp(float c){ filter.wasp.setKeyTracking(c); }
-    void setOnOffWasp(bool on)      { filter.wasp.setOnOff(on); }
+    void setOnOffWasp(bool on) {
+        !active && !on ? filter.wasp.dumpOff() :
+        filter.wasp.setOnOff(on);
+    }
 
     void setCutoffObf(float c)      { filter.obf.setCutOff(c); }
     void setResonanceObf(float r)   { filter.obf.setResonance(r); }
     void setKeyTrackingObf(float k) { filter.obf.setKeyTracking(k); }
     void setModeObf(float m)        { filter.obf.setMode(m); }
-    void setOnOffObf(bool on)       { filter.obf.setOnOff(on); }
+    void setOnOffObf(bool on) {
+        !active && !on ? filter.obf.dumpOff() :
+        filter.obf.setOnOff(on);
+    }
 
 
     void setCutoffTB(float v)       { filter.tbfilter.setCutoff(v);}
     void setResonanceTB(float v)    { filter.tbfilter.setResonance(v);}
     void setVintageAmountTB(float v){ filter.tbfilter.setVintageAmount(v);}
-    void setTBOnOff(bool on)        { filter.tbfilter.setOnOff(on); }
+    void setTBOnOff(bool on) {
+        !active && !on ? filter.tbfilter.dumpOff() :
+        filter.tbfilter.setOnOff(on);
+    }
 
     void setAge(float v)            { age = ageCurve(v); }
 
@@ -535,6 +540,7 @@ public:
     }
 
     void setOnOffLP(bool value) {
+        !active && !value ? filter.filterLP.dumpOff() :
         filter.filterLP.setOnOff(value);
     }
 
@@ -549,6 +555,7 @@ public:
     }
 
     void setOnOffHP(bool value) {
+        !active && !value ? filter.filterHP.dumpOff() :
         filter.filterHP.setOnOff(value);
     }
 
@@ -687,7 +694,6 @@ private:
     SamplePlayer player;
     ADSR env;
 
-
     bool active = false;
     double sampleRate = 44100.0f;
     float vel = 1.0f;
@@ -765,54 +771,43 @@ public:
     }
 
     void resetFilter(int id) {
-        if (isDragFilterOn)
-        for (auto& v : voices) {
+        if (isDragFilterOn) {
             switch(id) {
-                case 8:  v->filter.tbfilter.setOnOff(isDragFilterOn); break;
-                case 9:  v->filter.wasp.setOnOff(isDragFilterOn) ; break;
-                case 10: v->filter.filterLP.setOnOff(isDragFilterOn) ; break;
-                case 11: v->filter.filterHP.setOnOff(isDragFilterOn); break;
-                case 12: v->filter.obf.setOnOff(isDragFilterOn); break;
+                case 8:  updateAllVoices(&SampleVoice::setTBOnOff, isDragFilterOn); break;
+                case 9:  updateAllVoices(&SampleVoice::setOnOffWasp, isDragFilterOn); break;
+                case 10: updateAllVoices(&SampleVoice::setOnOffLP, isDragFilterOn); break;
+                case 11: updateAllVoices(&SampleVoice::setOnOffHP, isDragFilterOn); break;
+                case 12: updateAllVoices(&SampleVoice::setOnOffObf, isDragFilterOn); break;
                 default: break;
             }
+            isDragFilterOn = false;
         }
-        isDragFilterOn = false;
     }
 
     void setFilterOff(int id) {
         switch(id) {
-            case 8:  isDragFilterOn = voices[0]->filter.tbfilter.getOnOff(); break;
-            case 9:  isDragFilterOn = voices[0]->filter.wasp.getOnOff(); break;
-            case 10: isDragFilterOn = voices[0]->filter.filterLP.getOnOff(); break;
-            case 11: isDragFilterOn = voices[0]->filter.filterHP.getOnOff(); break;
-            case 12: isDragFilterOn = voices[0]->filter.obf.getOnOff(); break;
-            default: break;
-        }
-        
-        for (auto& v : voices) {
-            switch(id) {
-                case 8: v->isActive() ?
-                    v->filter.tbfilter.setOnOff(false) :
-                    v->filter.tbfilter.dumpOff();
-                    break;
-                case 9: v->isActive() ?
-                    v->filter.wasp.setOnOff(false) :
-                    v->filter.wasp.dumpOff();
-                    break;
-                case 10: v->isActive() ?
-                    v->filter.filterLP.setOnOff(false) :
-                    v->filter.filterLP.dumpOff();
-                    break;
-                case 11: v->isActive() ?
-                    v->filter.filterHP.setOnOff(false) :
-                    v->filter.filterHP.dumpOff();
-                    break;
-                case 12: v->isActive() ?
-                    v->filter.obf.setOnOff(false) :
-                    v->filter.obf.dumpOff();
-                    break;
-                default: break;
-            }
+            case 8:
+                isDragFilterOn = voices[0]->filter.tbfilter.getOnOff();
+                updateAllVoices(&SampleVoice::setTBOnOff, false);
+                break;
+            case 9:
+                isDragFilterOn = voices[0]->filter.wasp.getOnOff();
+                updateAllVoices(&SampleVoice::setOnOffWasp, false);
+                break;
+            case 10:
+                isDragFilterOn = voices[0]->filter.filterLP.getOnOff();
+                updateAllVoices(&SampleVoice::setOnOffLP, false);
+                break;
+            case 11:
+                isDragFilterOn = voices[0]->filter.filterHP.getOnOff();
+                updateAllVoices(&SampleVoice::setOnOffHP, false);
+                break;
+            case 12:
+                isDragFilterOn = voices[0]->filter.obf.getOnOff();
+                updateAllVoices(&SampleVoice::setOnOffObf, false);
+                break;
+            default:
+                break;
         }
     }
 
@@ -820,22 +815,17 @@ public:
 
     void setLoop(bool loop) {
         playLoop = loop;
-        //rb.clear();
-        //tbfilter.hardReset();
     }
 
     void setLoopBank(const SampleBank* lbank) {
         loopBank = lbank;
         rb.setLoopRoot(loopBank->getSample(0));
         rb.makeLoop();
-        //tbfilter.hardReset();
     }
 
     void setBank(const SampleBank* sbank) {
         sampleBank = sbank;
-        //rb.build(sampleBank->getSample(0), sampleRate);
         rb.setRoot(sampleBank->getSample(0));
-        //tbfilter.hardReset();
     }
 
     void getAnalyseBuffer(float *abuf, int frames) {

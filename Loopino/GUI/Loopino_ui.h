@@ -295,23 +295,6 @@ public:
                       main window
 ****************************************************************/
 
-    void setCursor(Widget_t *frame) {
-        #ifdef _WIN32
-        frame->cursor = LoadCursor(NULL, IDC_HAND);
-        frame->cursor2 = LoadCursor(NULL, IDC_SIZEALL);
-        #else
-        frame->cursor = XCreateFontCursor(frame->app->dpy, XC_hand2);
-        frame->cursor2 = XCreateFontCursor(frame->app->dpy, XC_sb_h_double_arrow);
-        #endif
-    }
-
-    void setFrameCallbacks(Widget_t *frame) {
-        setCursor(frame);
-        frame->func.button_press_callback = drag_frame;
-        frame->func.motion_callback = move_frame;;
-        frame->func.button_release_callback = drop_frame;
-    }
-
     // create the main GUI
     void createGUI(Xputty *app) {
         #ifndef RUN_AS_PLUGIN
@@ -2247,6 +2230,23 @@ private:
     void setSustain(float v)         { synth.setSustain(v);  expose_widget(Envelope); }
     void setRelease(float v)         { synth.setRelease(v);  expose_widget(Envelope); }
 
+    void setCursor(Widget_t *frame) {
+        #ifdef _WIN32
+        frame->cursor = LoadCursor(NULL, IDC_HAND);
+        frame->cursor2 = LoadCursor(NULL, IDC_SIZEALL);
+        #else
+        frame->cursor = XCreateFontCursor(frame->app->dpy, XC_hand2);
+        frame->cursor2 = XCreateFontCursor(frame->app->dpy, XC_sb_h_double_arrow);
+        #endif
+    }
+
+    void setFrameCallbacks(Widget_t *frame) {
+        setCursor(frame);
+        frame->func.button_press_callback = drag_frame;
+        frame->func.motion_callback = move_frame;;
+        frame->func.button_release_callback = drop_frame;
+    }
+
     void widget_set_cursor(Widget_t *w, OS_CURSOR c) {
         #ifdef _WIN32
         if (GetCapture() == w->widget || w->mouse_inside)
@@ -2281,7 +2281,6 @@ private:
         os_get_window_metrics(w, &metrics);
         self->sz.beginDrag(w, xbutton->x_root, xbutton->y_root);
         self->synth.setFilterOff(w->data);
-        
     }
 
     // move left loop point following the mouse pointer
@@ -2294,7 +2293,7 @@ private:
         self->sz.dragMove(xmotion->x_root, xmotion->y_root);
     }
 
-
+    // send key press events from widgets to the MIDI keyboard
     void commonWidgetSettings(Widget_t *wi) {
         wi->parent_struct = (void*)this;
         wi->flags |= NO_AUTOREPEAT;

@@ -25,6 +25,7 @@
 #include <atomic>
 
 #include "RtCheck.h"
+#include "Denormals.h"
 
 class AlsaAudioOut {
 public:
@@ -209,6 +210,7 @@ public:
 
         static float fRec0[2] = {0};
         while (running.load()) {
+            dp.set_();
             if (( uiPtr->af.samplesize && uiPtr->af.samples != nullptr) && uiPtr->play && uiPtr->ready) {
                 float fSlow0 = 0.0010000000000000009 * uiPtr->gain;
                 for (uint32_t i = 0; i< framesPerBuffer; i++) {
@@ -261,6 +263,7 @@ public:
                 snd_pcm_prepare(pcm);
             }
             read();
+            dp.reset_();
         }
     }
 
@@ -295,6 +298,7 @@ private:
         }
     }
 
+    DenormalProtection dp;
     std::string deviceName;
     std::thread audioThread;
     snd_pcm_t* pcm = nullptr;

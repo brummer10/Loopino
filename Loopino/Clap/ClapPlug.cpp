@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "Denormals.h"
+
 typedef struct plugin_t plugin_t;
 
 #define RUN_AS_PLUGIN
@@ -53,6 +55,7 @@ struct ClapStreamIn : StreamIn {
 
 // Plugin data structure
 struct plugin_t {
+    DenormalProtection dp;
     clap_plugin_t plugin;
     const clap_host_t *host;
     Loopino *r;
@@ -499,6 +502,7 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         return false; // Invalid format
     }
 
+    plug->dp.set_();
     //float *input = process->audio_inputs[0].data32[0]; // Mono input channel
     float *left_output = process->audio_outputs[0].data32[0]; // Left channel of stereo output
     float *right_output = process->audio_outputs[0].data32[1]; // Right channel of stereo output
@@ -565,6 +569,7 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         right_output[i] += out;
     }
 
+    plug->dp.reset_();
     return CLAP_PROCESS_CONTINUE;
 }
 

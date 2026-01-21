@@ -17,7 +17,7 @@ endif
 ifeq ($(MAKECMDGOALS),debug)
   CXXFLAGS += -g -DDEBUG
 else
-  CXXFLAGS += -O2 -DNDEBUG
+  CXXFLAGS += -O3 -DNDEBUG
 endif
 
 ifneq ($(MAKECMDGOALS),clap)
@@ -92,7 +92,7 @@ ifeq ($(TARGET), Linux)
 	CFLAGS += -Wall -funroll-loops `$(PKGCONFIG) $(PKGCONFIG_FLAGS) --cflags sndfile $(USEAPI) fftw3f `\
 	-ffast-math -fomit-frame-pointer -fstrength-reduce -fdata-sections \
 	-pthread $(SSE_CFLAGS)
-	CXXFLAGS += -MMD -std=c++17 -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
+	CXXFLAGS += -MMD -std=c++17 -fno-math-errno -fno-trapping-math -fPIC -D_OS_UNIX_ -DALVER=\"$(VER)\" $(CFLAGS)
 	LDFLAGS += $(INCLUDES) -lm -pthread -lpthread -lstdc++ \
 	-I../rubberband/ -I../rubberband/rubberband/ -L. ../rubberband/lib/librubberband.$(STATIC_LIB_EXT) \
 	`$(PKGCONFIG) $(PKGCONFIG_FLAGS) --libs sndfile $(USEAPI) fftw3f `

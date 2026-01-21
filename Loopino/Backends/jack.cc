@@ -14,6 +14,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "Denormals.h"
+
 
 /****************************************************************
         jack.cc   native jackd support for Loopino
@@ -24,6 +26,7 @@
 struct JackBackend
 {
     Loopino* ui;
+    DenormalProtection dp;
 
     jack_client_t* client   = nullptr;
     jack_port_t*   midi_port = nullptr;
@@ -131,6 +134,7 @@ void JackBackend::processMidi(void* midi_input_port_buf) {
 int JackBackend::process(jack_nframes_t nframes, void* arg) {
     auto* jb = static_cast<JackBackend*>(arg);
     if (!jb->runProcess) return 0;
+    jb->dp.set_();
 
     void* midi_in = jack_port_get_buffer(jb->midi_port, nframes);
     float* input  = (float*)jack_port_get_buffer(jb->in_port, nframes);
@@ -203,6 +207,7 @@ int JackBackend::process(jack_nframes_t nframes, void* arg) {
         output[i] += out;
         output1[i] += out;
     }
+    jb->dp.reset_();
     return 0;
 }
 

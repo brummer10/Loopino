@@ -236,7 +236,7 @@ private:
 
                 if (index == newIndex && dragWidget) {
                     oldX = wmx;
-                    oldY = w->scale.init_y;
+                    oldY = wmy; //w->scale.init_y;
                 }
 
                 tweens.push_back({ w, oldX, oldY, targetX, targetY, 0.0f });
@@ -268,7 +268,7 @@ private:
             auto* w = entries[i];
             if (w->data == -1) continue; // fixed frame
             int cx = w->x ;
-            if ((int)i >= oldIndex) cx += w->width + spacingX;
+            if ((int)i > oldIndex) cx += w->width + spacingX;
             int cy = w->scale.init_y;
             int dx = std::abs(mx - cx);
             if (cy < my) continue;

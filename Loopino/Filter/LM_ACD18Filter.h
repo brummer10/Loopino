@@ -99,6 +99,11 @@ public:
         z2 += g * (z1 - z2);
         z3 += g * (z2 - z3);
 
+        z1 = antiDenormal(z1);
+        z2 = antiDenormal(z2);
+        z3 = antiDenormal(z3);
+        x = antiDenormal(x);
+
         float resActivity = std::fabs(z3) * resonance;
         bassDropEnv += 0.0008f * (resActivity - bassDropEnv);
         float bassDrop = 1.0f - bassDropEnv * 0.35f;
@@ -145,6 +150,10 @@ private:
         g = g / (1.0f + g);
 
         resonanceGain = resonance * 1.3f;
+    }
+
+    inline float antiDenormal(float x) {
+        return (std::abs(x) < 1e-15f) ? 0.0f : x;
     }
 
     static inline float tanh_fast(float x) {

@@ -42,6 +42,8 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 - Full jack-audio-connection-kit support
 
 
+[Documentation](https://github.com/brummer10/Loopino/wiki/User-Documentation)
+
 The GUI is created with libxputty.
 
 ## Availability
