@@ -96,7 +96,7 @@ public:
     Widget_t *PitchWheel;
     Widget_t *keyboard;
     ParallelThread pa;
-    ParallelThread fetch;
+    //ParallelThread fetch;
     AudioFile af;
     PolySynth synth;
     Params param;
@@ -1323,6 +1323,9 @@ private:
         #if defined(__linux__) || defined(__FreeBSD__) || \
             defined(__NetBSD__) || defined(__OpenBSD__)
         XLockDisplay(w->app->dpy);
+        #endif
+        #if defined (RUN_AS_PLUGIN)
+            runGui();
         #endif
         if (loadPresetMIDI > -1) {
             int loadNew = -1;

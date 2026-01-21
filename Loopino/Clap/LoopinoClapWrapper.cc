@@ -267,8 +267,8 @@
         #endif
         w_top->flags |= HIDE_ON_DELETE;
         createGUI(&app);
-        fetch.startTimeout(60);
-        fetch.set<Loopino, &Loopino::runGui>(this);
+        //fetch.startTimeout(60);
+        //fetch.set<Loopino, &Loopino::runGui>(this);
     }
 
     void startGui() {
@@ -279,8 +279,8 @@
         w_top  = create_window(&app, os_get_root_window(&app, IS_WINDOW), 0, 0, w, h);
         w_top->flags |= HIDE_ON_DELETE;
         createGUI(&app);
-        fetch.startTimeout(60);
-        fetch.set<Loopino, &Loopino::runGui>(this);
+        //fetch.startTimeout(60);
+        //fetch.set<Loopino, &Loopino::runGui>(this);
     }
     
 
@@ -345,7 +345,7 @@
     }
 
     void quitGui() {
-        fetch.stop();
+        //fetch.stop();
         clearValueBindings();
         onExit();
     }
