@@ -15,7 +15,6 @@
 #include <stddef.h>
 #include <sstream>
 
-#include "Denormals.h"
 
 #define RUN_AS_PLUGIN
 #define IS_VST2
@@ -59,7 +58,6 @@ class loopino_plugin_t {
 public:
     AEffect* effect;
     Loopino *r;
-    DenormalProtection dp;
     ERect editorRect;
     int width, height;
     float SampleRate;
@@ -133,7 +131,7 @@ int32_t loopino_plugin_t::process_events (VstEvents* events) {
 
 static void processReplacing(AEffect* effect, float** inputs, float** outputs, int32_t nframes) {
     loopino_plugin_t* plug = (loopino_plugin_t*)effect->object;
-    plug->dp.set_();
+
     float* left_output = outputs[0];
     float* right_output = outputs[1];
 
@@ -170,7 +168,6 @@ static void processReplacing(AEffect* effect, float** inputs, float** outputs, i
         left_output[i] += out;
         right_output[i] += out;
     }
-    plug->dp.reset_();
 }
 
 /****************************************************************
