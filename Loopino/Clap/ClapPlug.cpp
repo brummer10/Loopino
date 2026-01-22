@@ -518,6 +518,14 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         float fSlow0 = 0.0010000000000000009 * plug->r->gain;
         for (uint32_t i = 0; i < nframes; i++) {
             // process playback
+            if (plug->r->position > plug->r->loopPoint_r) {
+                for (; i < nframes; i++) {
+                    left_output[i] = 0.0f;
+                    right_output[i] = 0.0f;
+                }
+                plug->r->play = false;
+                break;
+            }
             fRec0[0] = fSlow0 + 0.999 * fRec0[1];
             for (uint32_t c = 0; c < plug->r->af.channels; c++) {
                 if (!c) {
@@ -529,14 +537,10 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
             fRec0[1] = fRec0[0];
             // track play-head position
             plug->r->position++;
-            if (plug->r->position > plug->r->loopPoint_r) {
-                plug->r->position = plug->r->loopPoint_l;
-                plug->r->play = false;
-            } else if (plug->r->position <= plug->r->loopPoint_l) {
-                plug->r->position = plug->r->loopPoint_r;
-            }
         }
     } else {
+        fRec0[1] = fRec0[0] = 0.0f;
+        plug->r->position = plug->r->loopPoint_l;
         memset(left_output, 0.0, nframes * sizeof(float));
         memset(right_output, 0.0, nframes * sizeof(float));
     }

@@ -1324,6 +1324,9 @@ private:
             defined(__NetBSD__) || defined(__OpenBSD__)
         XLockDisplay(w->app->dpy);
         #endif
+        #if defined (IS_VST2)
+        checkParentWindowSize(w_top->width, w_top->height);
+        #endif
         #if defined (RUN_AS_PLUGIN)
             runGui();
         #endif
