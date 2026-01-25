@@ -20,19 +20,24 @@
 class LM_EII12 {
 public:
 
-    bool getOnOff() const { return onOff; }
-    void setCutOff(float c) { cutoff = c; }
-    void setDrive(float d) { drive = d; }
-    void setAmount(float a) { amount = a; }
+    bool getOnOff() const { return onOffState; }
 
-    void setOnOff(bool on) {
-        onOff = on;
-    }
+    void setCutOff(float c) { cutoffState = c; }
+    void setDrive(float d) { driveState = d; }
+    void setAmount(float a) { amountState = a; }
+    void setOnOff(bool on) { onOffState = on; }
 
     void setSampleRate(float sr) {
         float wc = 2.0f * M_PI * cutoff;
         float k  = wc / (wc + sr);
         a = k; b = 1.f - k;
+    }
+
+    void applyState() {
+        cutoff = cutoffState;
+        drive = driveState;
+        amount = amountState;
+        onOff = onOffState;
     }
 
     inline void processV(std::vector<float>& s) {
@@ -55,6 +60,10 @@ private:
     float drive  = 1.2f;
     float amount = 1.0f;
     bool  onOff     = false;
+    float cutoffState = 12000.0f;
+    float driveState  = 1.2f;
+    float amountState = 1.0f;
+    bool  onOffState     = false;
 
     float lp = 0.0f, a=0.0f, b=0.0f;
 

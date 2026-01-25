@@ -88,6 +88,8 @@ static void getParameterName(AEffect*, int32_t index, char* label) {
 
 int32_t loopino_plugin_t::process_events (VstEvents* events) {
     if (!events) return 1;
+    MidiKeyboard* keys = nullptr;
+    if (guiIsCreated) keys = (MidiKeyboard*)r->keyboard->private_struct;
 
     for (int32_t i = 0; i < events->numEvents; ++i) {
 
@@ -105,16 +107,19 @@ int32_t loopino_plugin_t::process_events (VstEvents* events) {
                 if (data2 > 0)
                 {
                     r->synth.noteOn((int) data1, (float)(data2/127.0f));
+                    if (guiIsCreated) set_key_in_matrix(keys->in_key_matrix[0], (int)data1, true);
                 }
                 else
                 {
                     // NoteOn Velocity 0 = NoteOff
                     r->synth.noteOff((int)data1);
+                    if (guiIsCreated) set_key_in_matrix(keys->in_key_matrix[0], (int)data1, false);
                 }
                 break;
 
             case 0x80: // NoteOff
                 r->synth.noteOff((int)data1);
+                if (guiIsCreated) set_key_in_matrix(keys->in_key_matrix[0], (int)data1, false);
                 break;
 
             default:
@@ -135,11 +140,21 @@ static void processReplacing(AEffect* effect, float** inputs, float** outputs, i
     float* left_output = outputs[0];
     float* right_output = outputs[1];
 
+    memset(left_output, 0.0, nframes * sizeof(float));
+    memset(right_output, 0.0, nframes * sizeof(float));
     static float fRec0[2] = {0};
     if (( plug->r->af.samplesize && plug->r->af.samples != nullptr) && plug->r->play && plug->r->ready) {
         float fSlow0 = 0.0010000000000000009 * plug->r->gain;
         for (int32_t i = 0; i < nframes; i++) {
             // process playback
+            if (plug->r->position > plug->r->loopPoint_r) {
+                for (; i < nframes; i++) {
+                    left_output[i] = 0.0f;
+                    right_output[i] = 0.0f;
+                }
+                plug->r->play = false;
+                break;
+            }
             fRec0[0] = fSlow0 + 0.999 * fRec0[1];
             for (uint32_t c = 0; c < plug->r->af.channels; c++) {
                 if (!c) {
@@ -151,16 +166,10 @@ static void processReplacing(AEffect* effect, float** inputs, float** outputs, i
             fRec0[1] = fRec0[0];
             // track play-head position
             plug->r->position++;
-            if (plug->r->position > plug->r->loopPoint_r) {
-                plug->r->position = plug->r->loopPoint_l;
-                plug->r->play = false;
-            } else if (plug->r->position <= plug->r->loopPoint_l) {
-                plug->r->position = plug->r->loopPoint_r;
-            }
         }
     } else {
-        memset(left_output, 0.0, nframes * sizeof(float));
-        memset(right_output, 0.0, nframes * sizeof(float));
+        fRec0[1] = fRec0[0] = 0.0f;
+        plug->r->position = plug->r->loopPoint_l;
     }
     for (int32_t i = 0; i < nframes; i++) {
         // process synth

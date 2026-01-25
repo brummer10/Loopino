@@ -133,22 +133,21 @@ private:
 
 class LM_CMP12Dac {
 public:
-    bool getOnOff() const { return onOff; }
-    void setRatio(float r) {
-        sppre.ratio = r;
-        sppost.ratio = r;
-    }
+    bool getOnOff() const { return onOffState; }
 
+    void setRatio(float r) { ratioState = r; }
     void setDrive(float d) {spbrick.drive = d; }
-
-    void setOnOff(bool on) {
-        onOff = on;
-    }
+    void setOnOff(bool on) { onOffState = on; }
 
     void setSampleRate(float sr) {
         sppre.setSampleRate(sr);
         spbrick.setSampleRate(sr);
         sppost.setSampleRate(sr);
+    }
+
+    void applyState() {
+        sppre.ratio = sppost.ratio = ratioState;
+        onOff = onOffState;
     }
 
     inline void processV(std::vector<float>& s) {
@@ -168,4 +167,6 @@ private:
     LM_CMP12Brick spbrick;
     LM_CMP12CompanderPost sppost;
     bool  onOff     = false;
+    bool onOffState = false;
+    float ratioState = 1.65f;
 };

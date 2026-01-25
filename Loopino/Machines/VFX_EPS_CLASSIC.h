@@ -38,13 +38,17 @@ struct EPSFilter {
 class VFX_EPS_CLASSIC {
 public:
 
-    bool getOnOff() const { return onOff; }
-    void setDrive(float d) { drive = d; }
-    void setOnOff(bool on) {
-        onOff = on;
-    }
+    bool getOnOff() const  { return onOffState; }
+
+    void setDrive(float d) { driveState = d; }
+    void setOnOff(bool on) { onOffState = on; }
 
     void setSampleRate(double sr) {
+    }
+
+    void applyState() {
+        drive = driveState;
+        onOff = onOffState;
     }
 
     inline void processV(std::vector<float>& s) {
@@ -68,6 +72,8 @@ private:
     EPSFilter epsFilter;
     float drive = 1.0f;
     bool  onOff     = false;
+    float driveState = 1.0f;
+    bool  onOffState     = false;
     double epsPhase = 0.0;
 
     inline float eps_adc(float x) {

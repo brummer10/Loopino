@@ -566,6 +566,8 @@ public:
         filter.filterHP.keyTracking = std::clamp(amt, 0.0f, 1.0f);
     }
 
+    void setSampleToBig(bool set) { sampleToBig = set; }
+
     inline float velocityCurve(float vel) {
         return powf(vel, velmode) * velComp;
     }
@@ -604,19 +606,21 @@ public:
         active = true;
         vel = velocityCurve(velocity);
 
-        if (!looping) {
-            auto s = rb->getNearest(midiNote);
-            if (s) {
-                sampleData = s;
-                sourceRate = s->sourceRate;
-                rootFreq   = s->rootFreq;
-            }
-        } else {
-            auto s = rb->getLoop();
-            if (s) {
-                sampleData = s;
-                sourceRate = s->sourceRate;
-                rootFreq   = s->rootFreq;
+        if (!sampleToBig) {
+            if (!looping) {
+                auto s = rb->getNearest(midiNote);
+                if (s) {
+                    sampleData = s;
+                    sourceRate = s->sourceRate;
+                    rootFreq   = s->rootFreq;
+                }
+            } else {
+                auto s = rb->getLoop();
+                if (s) {
+                    sampleData = s;
+                    sourceRate = s->sourceRate;
+                    rootFreq   = s->rootFreq;
+                }
             }
         }
 
@@ -660,6 +664,12 @@ public:
         return out;
     }
 
+    void processBlock(uint32_t nframes, float *out) {
+        for (uint32_t i = 0; i < nframes; i++) {
+            out[i] = process();
+        }
+    }
+
     void getAnalyseBuffer(float *abuf, int frames,
                         std::shared_ptr<const SampleInfo> sampleData,
                         double sourceRate, double rootFreq) {
@@ -694,6 +704,7 @@ private:
     ADSR env;
 
     bool active = false;
+    bool sampleToBig = true;
     double sampleRate = 44100.0f;
     float vel = 1.0f;
     float velmode = 0.7f;
@@ -810,6 +821,11 @@ public:
         }
     }
 
+    void setSampleToBig(bool set) {
+        updateAllVoices(&SampleVoice::setSampleToBig, set);
+        sampleToBig = set;
+    }
+
     void setReverse(int o) { rb.setReverse(intToBool(o)); }
 
     void setLoop(bool loop) {
@@ -824,7 +840,9 @@ public:
 
     void setBank(const SampleBank* sbank) {
         sampleBank = sbank;
-        rb.setRoot(sampleBank->getSample(0));
+        if (!sampleToBig) {
+            rb.setRoot(sampleBank->getSample(0));
+        }
     }
 
     void getAnalyseBuffer(float *abuf, int frames) {
@@ -1001,6 +1019,7 @@ private:
     float fRec0[2] = {0.0f};
     bool playLoop;
     bool isDragFilterOn = false;
+    bool sampleToBig = true;
 };
 
 #endif

@@ -24,6 +24,7 @@ public:
 
     void setSampleRate(float sr) {
         sampleRate = sr;
+        srconst = 1.0f/sr;
         fadeStep = 1.0f / (0.02f * sampleRate);
     }
 
@@ -70,7 +71,7 @@ public:
         }
 
         float cutoff = keyTrackCutoff();
-        float g = 1.0f - std::exp(-2.0f * float(M_PI) * cutoff / sampleRate);
+        float g = 1.0f - std::exp(-2.0f * float(M_PI) * cutoff * srconst);
         float fb = mixFeedback(in, s2.z, s4.z);
         fb = fbFilter.process(fb, 0.01f);
         float x = in - resonance * fb;
@@ -153,6 +154,7 @@ private:
     }
 
     float sampleRate = 44100.0f;
+    float srconst = 1.0f/44100.0f;
     float fadeGain = 0.0f;
     float fadeStep = 0.0f;
     bool  targetOn = false; 

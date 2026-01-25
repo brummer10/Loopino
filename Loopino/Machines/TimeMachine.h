@@ -33,15 +33,19 @@ struct LP {
 class TimeMachine {
 public:
 
-    bool getOnOff() const { return onoff; }
-    void setOnOff(bool o)  { onoff = o; }
+    bool getOnOff() const { return onoffState; }
 
-    void setTimeDial(float t) {
-        t = std::clamp(t, 0.f, 1.f);
+    void setOnOff(bool o)  { onoffState = o; }
+    void setTimeDial(float time) {
+        t = std::clamp(time, 0.f, 1.f);
+    }
+
+    void applyState() {
         drive  = 0.15f + t*t * 1.6f;
         grit   = 0.10f + t * 0.90f;
         jitter = t*t*t * 0.75f;
         cutoff = 0.92f - t*t * 0.72f;
+        onoff = onoffState;
     }
 
     void processV(std::vector<float>& s) {
@@ -54,6 +58,8 @@ public:
 private:
     float drive=0.3f, grit=0.4f, jitter=0.4f, cutoff=0.6f;
     bool onoff = false;
+    bool onoffState = false;
+    float t = 0.2;
     LP lp;
 
     inline float tanh_fast(float x) {

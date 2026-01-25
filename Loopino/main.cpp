@@ -23,7 +23,7 @@
 Loopino ui;
 
 #include "CmdParser.h"
-#include "jack.cc"
+#include "JackBackend.h"
 #include "AlsaAudioOut.h"
 #include "AlsaMidiIn.h"
 //#include "AlsaSeqMidiIn.h"

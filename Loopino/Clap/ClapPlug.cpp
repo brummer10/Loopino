@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <atomic>
+
 
 typedef struct plugin_t plugin_t;
 
@@ -30,6 +32,7 @@ typedef struct plugin_t plugin_t;
  */
 
 #include "Loopino_ui.h"
+#include "engine.h"
 
 struct ClapStreamOut : StreamOut {
     const clap_ostream_t* out;
@@ -56,12 +59,15 @@ struct plugin_t {
     clap_plugin_t plugin;
     const clap_host_t *host;
     Loopino *r;
+    Engine *engine;
     bool isInited;
     bool guiIsCreated;
     bool havePresetToLoad;
     uint32_t latency;
     uint32_t width;
     uint32_t height;
+    unsigned int split = 0;
+    std::atomic<uint32_t> splitPercent { 0 };
 };
 
 /****************************************************************
@@ -415,6 +421,7 @@ static bool init(const clap_plugin_t *plugin) {
 static void destroy(const clap_plugin_t *plugin) {
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
     gui_destroy(plugin);
+    delete plug->engine;
     delete plug->r;
     free(plug);
 }
@@ -491,6 +498,85 @@ static void clap_plug_process_event(plugin_t *plug, const clap_event_header_t *h
     }
 }
 
+static void clap_collect_midi(plugin_t* plug, const clap_input_events_t* in_events, uint32_t split) {
+    uint32_t w = plug->engine->midiWriteIdx.load(std::memory_order_relaxed);
+    auto& buf = plug->engine->midiBuf[w];
+    buf.clear();
+
+    const uint32_t ev_count = in_events->size(in_events);
+
+    for (uint32_t i = 0; i < ev_count; ++i) {
+        const clap_event_header_t* hdr = in_events->get(in_events, i);
+
+        if (hdr->time < split)
+            continue;
+
+        if (hdr->space_id != CLAP_CORE_EVENT_SPACE_ID)
+            continue;
+
+        const uint32_t ofs = hdr->time - split;
+
+        switch (hdr->type) {
+
+            case CLAP_EVENT_NOTE_ON: {
+                const clap_event_note_t* ev =
+                    (const clap_event_note_t*)hdr;
+
+                if (ev->velocity <= 0.0f) {
+                    // NOTE_ON with velocity 0 → NOTE_OFF
+                    buf.push(ofs, 0x80, ev->key, 0);
+                } else {
+                    buf.push(ofs,
+                             0x90,
+                             ev->key,
+                             (uint8_t)(ev->velocity * 127.0f));
+                }
+                break;
+            }
+
+            case CLAP_EVENT_NOTE_OFF:
+            case CLAP_EVENT_NOTE_CHOKE: {
+                const clap_event_note_t* ev =
+                    (const clap_event_note_t*)hdr;
+                buf.push(ofs, 0x80, ev->key, 0);
+                break;
+            }
+
+            case CLAP_EVENT_MIDI: {
+                const clap_event_midi_t* ev =
+                    (const clap_event_midi_t*)hdr;
+
+                //if (ev->size >= 3) {
+                    buf.push(ofs,
+                             ev->data[0],
+                             ev->data[1],
+                             ev->data[2]);
+               // }
+                break;
+            }
+
+            default:
+                break;
+        }
+    }
+}
+
+
+inline void setSplitPercent(plugin_t *plug, uint32_t percent) noexcept {
+    if (percent > 100) percent = 100;
+    plug->splitPercent.store(percent, std::memory_order_relaxed);
+}
+
+inline void getSplitPercent(plugin_t *plug) noexcept {
+    plug->splitPercent.store(100 - plug->r->latency, std::memory_order_relaxed);
+}
+
+inline uint32_t percentToSplit( uint32_t percent, uint32_t nframes) noexcept {
+    if (percent == 0) return 0;
+    if (percent >= 100) return nframes;
+    return (nframes * percent) / 100;
+}
+
 // Audio processing
 static clap_process_status process(const clap_plugin_t *plugin, const clap_process_t *process) {
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
@@ -502,10 +588,16 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
     //float *input = process->audio_inputs[0].data32[0]; // Mono input channel
     float *left_output = process->audio_outputs[0].data32[0]; // Left channel of stereo output
     float *right_output = process->audio_outputs[0].data32[1]; // Right channel of stereo output
+
     uint32_t nframes = process->frames_count;
+    getSplitPercent(plug);
+    uint32_t percent = plug->splitPercent.load(std::memory_order_relaxed);
+    plug->split = percentToSplit(percent, nframes);
+    uint32_t pframes = nframes - plug->split;
+
     const uint32_t nev = process->in_events->size(process->in_events);
     uint32_t ev_index = 0;
-    uint32_t next_ev_frame = nev > 0 ? 0 : nframes;
+    //uint32_t next_ev_frame = nev > 0 ? 0 : nframes;
 
     if (plug->r->param.controllerChanged.load(std::memory_order_acquire)) {
         sync_params_to_host(plugin, process->out_events);
@@ -513,15 +605,17 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
     }
 
 
+    memset(left_output, 0.0, nframes * sizeof(float));
+    memset(right_output, 0.0, nframes * sizeof(float));
     static float fRec0[2] = {0};
     if (( plug->r->af.samplesize && plug->r->af.samples != nullptr) && plug->r->play && plug->r->ready) {
         float fSlow0 = 0.0010000000000000009 * plug->r->gain;
-        for (uint32_t i = 0; i < nframes; i++) {
+        for (uint32_t i = 0; i < plug->split; i++) {
             // process playback
             if (plug->r->position > plug->r->loopPoint_r) {
                 for (; i < nframes; i++) {
-                    left_output[i] = 0.0f;
-                    right_output[i] = 0.0f;
+                    left_output[i+pframes] = 0.0f;
+                    right_output[i+pframes] = 0.0f;
                 }
                 plug->r->play = false;
                 break;
@@ -529,10 +623,10 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
             fRec0[0] = fSlow0 + 0.999 * fRec0[1];
             for (uint32_t c = 0; c < plug->r->af.channels; c++) {
                 if (!c) {
-                    left_output[i] = plug->r->af.samples[plug->r->position*plug->r->af.channels] * fRec0[0];
+                    left_output[i+pframes] = plug->r->af.samples[plug->r->position*plug->r->af.channels] * fRec0[0];
                     if (plug->r->af.channels ==1)
-                        right_output[i] = plug->r->af.samples[plug->r->position*plug->r->af.channels] * fRec0[0];
-                } else right_output[i] = plug->r->af.samples[plug->r->position*plug->r->af.channels+c] * fRec0[0];
+                        right_output[i+pframes] = plug->r->af.samples[plug->r->position*plug->r->af.channels] * fRec0[0];
+                } else right_output[i+pframes] = plug->r->af.samples[plug->r->position*plug->r->af.channels+c] * fRec0[0];
             }
             fRec0[1] = fRec0[0];
             // track play-head position
@@ -541,10 +635,34 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
     } else {
         fRec0[1] = fRec0[0] = 0.0f;
         plug->r->position = plug->r->loopPoint_l;
-        memset(left_output, 0.0, nframes * sizeof(float));
-        memset(right_output, 0.0, nframes * sizeof(float));
     }
     
+    for (; ev_index < nev; ++ev_index) {
+        const clap_event_header_t* hdr =
+            process->in_events->get(process->in_events, ev_index);
+
+        if (hdr->time >= plug->split)
+            break;
+
+        clap_plug_process_event(plug, hdr);
+        sync_params_to_plug(plugin, hdr);
+    }
+    clap_collect_midi(plug, process->in_events, plug->split);
+    
+
+    for (uint32_t i = 0; i < plug->split; ++i) {
+        float out = plug->r->synth.process();
+        left_output[i + pframes]  += out;
+        right_output[i + pframes] += out;
+    }
+
+    plug->engine->process(pframes, left_output, right_output);
+
+    plug->engine->midiWriteIdx.store(
+        plug->engine->midiWriteIdx.load() ^ 1,
+        std::memory_order_release
+    );
+    /*
     for (uint32_t i = 0; i < nframes; i++) {
         // process events
         while (ev_index < nev && next_ev_frame == i) {
@@ -567,7 +685,7 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
         float out = plug->r->synth.process();
         left_output[i] += out;
         right_output[i] += out;
-    }
+    }*/
 
     return CLAP_PROCESS_CONTINUE;
 }
@@ -579,6 +697,7 @@ static bool activate(const struct clap_plugin *plugin,
                              uint32_t                  max_frames_count) {
     plugin_t *plug = (plugin_t *)plugin->plugin_data;
     plug->r->setJackSampleRate(sample_rate);
+    plug->engine->init(plug->r, sample_rate, 20, 1); //SCHED_FIFO
     plug->isInited = true;
     if (plug->havePresetToLoad) plug->r->loadPresetToSynth();
     plug->havePresetToLoad = false;
@@ -626,6 +745,7 @@ static const clap_plugin_t *create(const clap_host_t *host) {
     plugin_t *plug = (plugin_t *)calloc(1, sizeof(plugin_t));
     if (!plug) return NULL;
     plug->r = new Loopino();
+    plug->engine = new Engine();
     plug->guiIsCreated = false;
     plug->isInited = false;
     plug->havePresetToLoad = false;

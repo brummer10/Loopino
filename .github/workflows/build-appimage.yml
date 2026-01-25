@@ -60,18 +60,46 @@ jobs:
           --icon-file AppDir/loopino.svg \
           --output appimage
 
-    - name: Build AppImage
-      env:
-        APPIMAGE_EXTRACT_AND_RUN: 1
+    - name: Create release filename (tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      shell: bash
       run: |
-        ./linuxdeploy-x86_64.AppImage \
-          --appdir AppDir \
-          --desktop-file AppDir/loopino.desktop \
-          --icon-file AppDir/loopino.svg \
-          --output appimage
+        set -euo pipefail
+        RELEASE_BASENAME="${{ github.event.repository.name }}-x86_64-${{ github.ref_name }}"
+        RELEASE_FILENAME="${RELEASE_BASENAME}.AppImage"
+        echo "RELEASE_FILENAME=${RELEASE_FILENAME}" >> $GITHUB_ENV
+
+        BUILT=$(ls Loopino-*.AppImage 2>/dev/null | head -n1 || true)
+        if [[ -z "$BUILT" ]]; then
+          echo "ERROR: No built AppImage found matching Loopino-*.AppImage"
+          ls -la || true
+          exit 1
+        fi
+        echo "Found built AppImage: $BUILT"
+        cp "$BUILT" "$RELEASE_FILENAME"
+        chmod +x "$RELEASE_FILENAME"
+
+    - name: Create GitHub release (tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        files: ${{ env.RELEASE_FILENAME }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload AppImage artifact
       uses: actions/upload-artifact@v4
       with:
         name: Loopino-x86_64.AppImage
         path: Loopino-*.AppImage
+
+    - name: Upload release archive (tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.RELEASE_FILENAME }}
+        path: ${{ env.RELEASE_FILENAME }}

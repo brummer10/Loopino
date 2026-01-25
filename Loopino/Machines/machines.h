@@ -77,6 +77,15 @@ public:
         }
     }
 
+    void applyState() {
+        cmp12dac.applyState();
+        mrg.applyState();
+        emu_12.applyState();
+        studio16.applyState();
+        tm.applyState();
+        eps.applyState();
+    }
+
     bool rebuildChain(const std::vector<int>& newOrder) {
         std::vector<int> newActive;
         buildActiveSignature(newOrder, newActive);

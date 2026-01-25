@@ -32,95 +32,122 @@
 class KeyCache
 {
 public:
-    KeyCache() { worker = std::thread([this]{ workerLoop(); }); }
-    ~KeyCache() { stop=true; cv.notify_all(); worker.join(); }
+    KeyCache() { 
+        for (int i = 0; i < WORKERS; ++i)
+            workers.emplace_back([this, i]{ workerLoop(i); });        
+    }
+    ~KeyCache() { 
+        stop = true;
+        cv.notify_all();
+        for (auto& w : workers)
+            w.join();        
+    }
 
     Machines machines;
+    Machines machines2;
     Machines loopMachines;
 
     void rebuildMachineChain(const std::vector<int>& order) {
         loopMachines.rebuildChain(order);
+        machines2.rebuildChain(order);
         if (machines.rebuildChain(order))
             rebuild();
     }
 
     void setLM_MIR8OnOff(bool on) {
         machines.mrg.setOnOff(on);
+        machines2.mrg.setOnOff(on);
         loopMachines.mrg.setOnOff(on);
         rebuild();
     }
     void setLM_MIR8Drive(float d) {
         machines.mrg.setDrive(d);
+        machines2.mrg.setDrive(d);
         loopMachines.mrg.setDrive(d);
     }
     void setLM_MIR8Amount(float a) {
         machines.mrg.setAmount(a);
+        machines2.mrg.setAmount(a);
         loopMachines.mrg.setAmount(a);
     }
 
     void setEmu_12OnOff(bool on) {
         machines.emu_12.setOnOff(on);
+        machines2.emu_12.setOnOff(on);
         loopMachines.emu_12.setOnOff(on);
         rebuild();
     }
     void setEmu_12Drive(float d) {
         machines.emu_12.setDrive(d);
+        machines2.emu_12.setDrive(d);
         loopMachines.emu_12.setDrive(d);
     }
     void setEmu_12Amount(float a) {
         machines.emu_12.setAmount(a);
+        machines2.emu_12.setAmount(a);
         loopMachines.emu_12.setAmount(a);
     }
 
     void setLM_CMP12OnOff(bool on) {
         machines.cmp12dac.setOnOff(on);
+        machines2.cmp12dac.setOnOff(on);
         loopMachines.cmp12dac.setOnOff(on);
         rebuild();
     }
     void setLM_CMP12Drive(float d) {
         machines.cmp12dac.setDrive(d);
+        machines2.cmp12dac.setDrive(d);
         loopMachines.cmp12dac.setDrive(d);
     }
     void setLM_CMP12Ratio(float r) {
         machines.cmp12dac.setRatio(r);
+        machines2.cmp12dac.setRatio(r);
         loopMachines.cmp12dac.setRatio(r);
     }
 
     void setStudio_16OnOff(bool on)  {
         machines.studio16.setOnOff(on);
+        machines2.studio16.setOnOff(on);
         loopMachines.studio16.setOnOff(on);
         rebuild();
         }
     void setStudio_16Drive(float d)  {
         machines.studio16.setDrive(d);
+        machines2.studio16.setDrive(d);
         loopMachines.studio16.setDrive(d);
     }
     void setStudio_16Warmth(float w) {
         machines.studio16.setWarmth(w);
+        machines2.studio16.setWarmth(w);
         loopMachines.studio16.setWarmth(w);
     }
     void setStudio_16HfTilt(float h) {
         machines.studio16.setHfTilt(h);
+        machines2.studio16.setHfTilt(h);
         loopMachines.studio16.setHfTilt(h);
     }
 
     void setVFX_EPSOnOff(bool on)  {
         machines.eps.setOnOff(on);
+        machines2.eps.setOnOff(on);
         loopMachines.eps.setOnOff(on);
         rebuild();
     }
     void setVFX_EPSDrive(float d)  {
         machines.eps.setDrive(d);
+        machines2.eps.setDrive(d);
         loopMachines.eps.setDrive(d);
     }
 
     void setTMOnOff(bool on)  {
         machines.tm.setOnOff(on);
+        machines2.tm.setOnOff(on);
         loopMachines.tm.setOnOff(on);
         rebuild();
     }
     void setTMTime(float d)  {
         machines.tm.setTimeDial(d);
+        machines2.tm.setTimeDial(d);
         loopMachines.tm.setTimeDial(d);
     }
 
@@ -132,6 +159,9 @@ public:
     void rebuild() {
         if (!root) return;
         clear();
+        machines.applyState();
+        machines2.applyState();
+        loopMachines.applyState();
         prewarmOctaves();
         prewarmQuints();
         makeLoop();
@@ -161,6 +191,8 @@ public:
             std::lock_guard<std::mutex> g2(cacheMutex);
             cache.clear();
         }
+        machines.applyState();
+        machines2.applyState();
         prewarmOctaves();
         prewarmQuints();
     }
@@ -175,6 +207,7 @@ public:
         s->data = std::move(loop_cache->data);
         s->rootFreq = loop_cache->rootFreq;
         s->sourceRate = loop_cache->sourceRate;
+        loopMachines.applyState();
         loopMachines.setSampleRate(s->sourceRate);
         loopMachines.process(s->data);
         loop = s;
@@ -242,6 +275,7 @@ public:
 private:
     static constexpr int CHUNK = 4096;
     static constexpr auto WORKER_YIELD = std::chrono::microseconds(250);
+    static constexpr int WORKERS = 2;
     std::shared_ptr<const SampleInfo> root;
     std::shared_ptr<const SampleInfo> loop;
     std::shared_ptr<const SampleInfo> loop_cache;
@@ -252,7 +286,8 @@ private:
     std::mutex qm;
     std::mutex cacheMutex;
     std::condition_variable cv;
-    std::thread worker;
+    std::vector<std::thread> workers;
+    //std::thread worker;
     std::atomic<bool> stop{false};
     bool reverse = false;
 
@@ -264,7 +299,7 @@ private:
         return int(std::round(69.0 + 12.0 * std::log2(f / 440.0)));
     }
 
-    void workerLoop() {
+    void workerLoop(int instance) {
         while(!stop) {
             int note = 0;
             {
@@ -275,11 +310,12 @@ private:
                     note=jobs.front(); jobs.pop();
                 }
             }
-            if (note)build(note);
+            Machines *m = instance ? &machines : &machines2;
+            if (note)build(note, m);
         }
     }
 
-    void build(int note) {
+    void build(int note, Machines *m) {
 
         RubberBand::RubberBandStretcher rb(root->sourceRate,1,
             RubberBand::RubberBandStretcher::OptionProcessOffline|
@@ -333,8 +369,8 @@ private:
         s->rootFreq = root->rootFreq;
         s->sourceRate = root->sourceRate;
 
-        machines.setSampleRate(root->sourceRate);
-        machines.process(s->data);
+        m->setSampleRate(root->sourceRate);
+        m->process(s->data);
         if (reverse) std::reverse(s->data.begin(), s->data.end());
         std::lock_guard<std::mutex> g(cacheMutex);
         cache[note] = s;

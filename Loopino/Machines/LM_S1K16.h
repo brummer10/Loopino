@@ -20,19 +20,24 @@
 class LM_S1K16 {
 public:
 
-    bool getOnOff() const { return onOff; }
-    void setDrive(float d) { drive = d; }
-    void setWarmth(float w) { warmth  = (1.0f - exp(-w * 3.5f)) * 0.85f; }
-    void setHfTilt(float h) { hfTilt = pow(h, 1.7f) * 1.2f;; }
+    bool getOnOff() const { return onOffState; }
 
-    void setOnOff(bool on) {
-        onOff = on;
-    }
+    void setDrive(float d) { driveState = d; }
+    void setWarmth(float w) { warmthState  = (1.0f - exp(-w * 3.5f)) * 0.85f; }
+    void setHfTilt(float h) { hfTiltState = pow(h, 1.7f) * 1.2f; }
+    void setOnOff(bool on) { onOffState = on; }
 
     void setSampleRate(double sr) {
         fs = sr;
         brick = blur = tiltLP = tiltHP = 0.0f;
         
+    }
+
+    void applyState() {
+        drive = driveState;
+        warmth  = warmthState;
+        hfTilt = hfTiltState;
+        onOff = onOffState;
     }
 
     inline void processV(std::vector<float>& s) {
@@ -60,6 +65,10 @@ private:
     float warmth  = 0.65f;
     float hfTilt  = 0.45f;
     bool  onOff     = false;
+    float driveState   = 1.1f;
+    float warmthState  = 0.65f;
+    float hfTiltState  = 0.45f;
+    bool  onOffState     = false;
 
     double fs = 44100.0;
     float brick = 0, blur = 0;
