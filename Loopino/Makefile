@@ -50,6 +50,16 @@ endif
 		SSE_CFLAGS =
 	endif
 
+	# Determine host architecture portably.
+	# If the build host is not an x86 variant, clear SSE flags so non-x86
+	# compilers won't receive inappropriate x86 options.
+	HOST_BUILD_ARCH := $(shell uname -m)
+	ifneq (,$(filter x86_64 i386 i686,$(HOST_BUILD_ARCH)))
+		# x86 host: keep SSE_CFLAGS as detected above
+	else
+		SSE_CFLAGS =
+	endif
+
 	# set bundle name
 	NAME = loopino
 	VER = 0.1
