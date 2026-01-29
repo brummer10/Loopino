@@ -312,6 +312,8 @@ AEffect* VSTPluginMain(audioMasterCallback audioMaster) {
     loopino_plugin_t* plug = (loopino_plugin_t*)calloc(1, sizeof(loopino_plugin_t));
     AEffect* effect = (AEffect*)calloc(1, sizeof(AEffect));
     plug->r = new Loopino();
+    plug->r->setLatencyCallback([plug]() {
+        return 0.0; });
     effect->object = plug;
     plug->effect = effect;
     plug->width = WINDOW_WIDTH;

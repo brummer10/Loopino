@@ -67,6 +67,7 @@ struct plugin_t {
     uint32_t width;
     uint32_t height;
     unsigned int split = 0;
+    std::atomic<float> latency_ {0.0f};
     std::atomic<uint32_t> splitPercent { 0 };
 };
 
@@ -571,7 +572,8 @@ inline void getSplitPercent(plugin_t *plug) noexcept {
     plug->splitPercent.store(100 - plug->r->latency, std::memory_order_relaxed);
 }
 
-inline uint32_t percentToSplit( uint32_t percent, uint32_t nframes) noexcept {
+inline uint32_t percentToSplit(plugin_t *plug, uint32_t percent, uint32_t nframes) noexcept {
+    plug->latency_.store(nframes - ((nframes * percent) / 100), std::memory_order_relaxed);
     if (percent == 0) return 0;
     if (percent >= 100) return nframes;
     return (nframes * percent) / 100;
@@ -592,7 +594,7 @@ static clap_process_status process(const clap_plugin_t *plugin, const clap_proce
     uint32_t nframes = process->frames_count;
     getSplitPercent(plug);
     uint32_t percent = plug->splitPercent.load(std::memory_order_relaxed);
-    plug->split = percentToSplit(percent, nframes);
+    plug->split = percentToSplit(plug, percent, nframes);
     uint32_t pframes = nframes - plug->split;
 
     const uint32_t nev = process->in_events->size(process->in_events);
@@ -745,6 +747,8 @@ static const clap_plugin_t *create(const clap_host_t *host) {
     plugin_t *plug = (plugin_t *)calloc(1, sizeof(plugin_t));
     if (!plug) return NULL;
     plug->r = new Loopino();
+    plug->r->setLatencyCallback([plug]() {
+        return plug->latency_.load(std::memory_order_relaxed); });
     plug->engine = new Engine();
     plug->guiIsCreated = false;
     plug->isInited = false;

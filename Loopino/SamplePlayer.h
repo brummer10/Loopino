@@ -20,6 +20,7 @@
 #include "DcBlocker.h"
 #include "Tone.h"
 #include "filters.h"
+#include "ScalaFactory.h"
 
 
 #ifndef SAMPLEPLAYER_H
@@ -464,6 +465,7 @@ public:
         : env(sr) {}
     KeyCache *rb = nullptr;
     Filters filter;
+    const Scala::TuningTable *tuning = nullptr;
     // Attack, Decay, Sustain, Release 
     void setADSR(float a, float d, float s, float r) {
         env.setParams(a, d, s, r);
@@ -471,12 +473,14 @@ public:
 
     void setSampleRate(double sr) {
         sampleRate = sr;
+        
         env.setSampleRate(sr);
         filter.setSampleRate(sr);
         player.setSampleRate(sr);
     }
 
-    float getEnvelopeLevel() { return env.getEnvelopeLevel(); }
+    float getEnvelopeLevel()        { return env.getEnvelopeLevel(); }
+    float getMidiFreq(int key)      { return midiToFreq(key); }
 
     void setAttack(float a)         { env.setAttack(a); }
     void setDecay(float d)          { env.setDecay(d); }
@@ -522,9 +526,12 @@ public:
     void setAge(float v)            { age = ageCurve(v); }
 
     void setPitchWheel(float f) {
-        float semitones = f * 2.0f;
+        /*float semitones = f * 2.0f;
         float factor = pow(2.0, semitones / 12.0);
         pitch = freq * factor - freq;
+        player.setFrequency(midiToFreq(midiNote), rootFreq);
+        */
+        pitch = std::clamp(f, -1.0f, 1.0f);
         player.setFrequency(midiToFreq(midiNote), rootFreq);
     }
 
@@ -623,12 +630,12 @@ public:
                 }
             }
         }
-
+        double targetFreq = midiToFreq(midiNote);
         player.setSample(sampleData, sourceRate);
-        player.setFrequency(midiToFreq(midiNote), rootFreq);
+        player.setFrequency(targetFreq, rootFreq);
         player.setLoop(0, sampleData->data.size() - 1, looping);
         player.reset();
-        filter.noteOn(midiNote);
+        filter.noteOn(targetFreq);
         env.noteOn();
     }
 
@@ -688,7 +695,7 @@ public:
                         double sourceRate, double rootFreq) {
 
         player.setSample(sampleData, sourceRate);
-        player.setFrequency(midiToFreq(rootKey), rootFreq);
+        player.setFrequency(midiToFreq(midiNote), rootFreq);
         player.setLoop(0, sampleData->data.size() - 1, loop);
         player.reset();
         player.processSave(duration, abuf);
@@ -709,16 +716,34 @@ private:
     float vel = 1.0f;
     float velmode = 0.7f;
     float velComp = 1.0f;
-    float freq = 440.0f;
+    float freq = 440.0f; // synth root freq
     float pitch = 0.0f;
     float age = 0.25f;
     int midiNote = -1;
-    double rootFreq = 440.0;
+    double rootFreq = 440.0; // key cache freq
 
+    inline double midiToFreq(int midiNote) {
+        if (midiNote < 0 || midiNote > 127 || !tuning) return 0.0;
+
+        const double pitchRangeSemi = 2.0;
+        const double pitchCents = pitch * pitchRangeSemi * 100.0;
+        const int degree = tuning->keymap[midiNote];
+        // 12-TET fallback
+        if (degree < 0 || degree >= (int)tuning->cents.size()) {
+            const double cents = (midiNote - 69) * 100.0 + pitchCents;
+            return freq * std::pow(2.0, cents * 0.000833333); // / 1200.0);
+        }
+        // micro tune table
+        const int rel = midiNote - tuning->rootMidi;
+        const int octave = (rel - degree) / tuning->periodSteps;
+        const double cents = octave * 1200.0 + tuning->cents[degree] + pitchCents;
+        return freq * std::pow(2.0, cents * 0.000833333); // / 1200.0);
+    }
+/*
     inline double midiToFreq(int midiNote) {
         return  (freq + pitch) * std::pow(2.0, (midiNote - 69 ) / 12.0);
     }
-
+*/
     inline float ageCurve(float a)
     {
         return a * a * (3.0f - 2.0f * a);
@@ -749,6 +774,8 @@ class PolySynth {
 public:
     PolySynth() {}
     KeyCache rb;
+    Scala::TuningTable tuning;
+    bool isInited = false;
 
     void init(double sr, size_t maxVoices = 48) {
         voices.clear();
@@ -756,6 +783,7 @@ public:
         for (size_t i = 0; i < maxVoices; ++i)
             voices.push_back(std::make_unique<SampleVoice>());
         sampleRate = sr;
+        Scala::makeEqual12(tuning);
         masterGain = (1.0f / std::sqrt((float)maxVoices));
         playLoop = false;
         chorus.setSampleRate(sr);
@@ -768,7 +796,17 @@ public:
             v->setADSR(0.01f, 0.2f, 0.7f, 0.4f); // Attack, Decay, Sustain, Release (in Seconds)
             v->setSampleRate(sr);
             v->rb = &rb;
+            v->tuning = &tuning;
         }
+        isInited = true;
+    }
+
+    float getMidiFreq(int key) { return voices[voices.size() - 1]->getMidiFreq(key); }
+
+    Scala::TuningTable& getScalaTable() { return tuning; }
+
+    void setScalaTuning(Scala::TuningTable& t) {
+        tuning = t;
     }
 
     void rebuildMachineChain(const std::vector<int>& order) {

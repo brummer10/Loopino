@@ -136,7 +136,7 @@ public:
     bool getOnOff() const { return onOffState; }
 
     void setRatio(float r) { ratioState = r; }
-    void setDrive(float d) {spbrick.drive = d; }
+    void setDrive(float d) { driveState = d; }
     void setOnOff(bool on) { onOffState = on; }
 
     void setSampleRate(float sr) {
@@ -147,6 +147,7 @@ public:
 
     void applyState() {
         sppre.ratio = sppost.ratio = ratioState;
+        spbrick.drive = driveState;
         onOff = onOffState;
     }
 
@@ -169,4 +170,5 @@ private:
     bool  onOff     = false;
     bool onOffState = false;
     float ratioState = 1.65f;
+    float driveState = 1.0f;
 };

@@ -36,7 +36,7 @@ struct ZDFLadderFilter {
     float fadeGain = 0.0f;
     float fadeStep = 0.0f;
     bool  targetOn = false; 
-    int midiNote = 0;
+    float targetFreq = 440.0f;
 
     const float minFreq = 20.0;
     const float maxFreq = 20000.0;
@@ -47,7 +47,7 @@ struct ZDFLadderFilter {
 
     void dumpOff() {
         targetOn = false;
-        recalcFilter(midiNote);
+        recalcFilter(targetFreq);
         reset();
         fadeGain = 0.0f;
         filterOff = true;
@@ -56,7 +56,7 @@ struct ZDFLadderFilter {
     void setOnOff(bool on) {
         targetOn = on;
         if (on && !filterOff) {
-            recalcFilter(midiNote);
+            recalcFilter(targetFreq);
             reset();
             filterOff = true;
         }
@@ -152,13 +152,12 @@ struct ZDFLadderFilter {
         return in * (1.0f - fadeGain) + hp * fadeGain;
     }
 
-    void recalcFilter(int midiNote_) {
-        midiNote = midiNote_;
+    void recalcFilter(float targetFreq_) {
+        targetFreq = targetFreq_;
         if (!filterOff) return;
-
         float baseCut = ccToFreq(ccCutoff);
-        float semi = midiNote - 60;
-        float keyFactor = std::pow(2.0f, (semi / 12.0f) * keyTracking);
+        constexpr double refFreq = 261.625565; // 440.0
+        float keyFactor = std::pow(targetFreq / refFreq, keyTracking);
         double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
         cutoff = finalCut;
         double Q = ccToQ(ccReso);
@@ -189,7 +188,7 @@ struct LadderFilter {
     float fadeGain = 0.0f;
     float fadeStep = 0.0f;
     bool  targetOn = false; 
-    int midiNote = 0;
+    float targetFreq = 440.0f;
 
     double bias = 0.0;
     double biasCoeff = 0.00005; 
@@ -206,7 +205,7 @@ struct LadderFilter {
 
     void dumpOff() {
         targetOn = false;
-        recalcFilter(midiNote);
+        recalcFilter(targetFreq);
         reset();
         fadeGain = 0.0f;
         filterOff = true;
@@ -215,7 +214,7 @@ struct LadderFilter {
     void setOnOff(bool on) {
         targetOn = on;
         if (on && !filterOff) {
-            recalcFilter(midiNote);
+            recalcFilter(targetFreq);
             reset();
             filterOff = true;
         }
@@ -302,13 +301,13 @@ struct LadderFilter {
         return input * (1.0f - fadeGain) + lp * fadeGain;
     }
 
-    void recalcFilter(int midiNote_) {
-        midiNote = midiNote_;
+    void recalcFilter(float targetFreq_) {
+        targetFreq = targetFreq_;
         if (!filterOff) return;
 
         float baseCut = ccToFreq(ccCutoff);
-        float semi = midiNote - 60;
-        float keyFactor = std::pow(2.0f, (semi / 12.0f) * keyTracking);
+        constexpr double refFreq = 261.625565; // 440.0
+        float keyFactor = std::pow(targetFreq / refFreq, keyTracking);
         double finalCut = std::clamp(baseCut * keyFactor, minFreq, maxFreq);
         cutoff = finalCut;
         //std::cout << finalCut << std::endl;

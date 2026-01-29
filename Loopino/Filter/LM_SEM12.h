@@ -31,12 +31,11 @@ struct SEMFilter {
 
     float sampleRate = 44100.0f;
     // Base params
-    float cutoff    = 200.0f; // 40.0f  …  12000.0f log
-    float resonance = 0.3f;    // 0.0f  …  0.6f
-    float keytrack  = 0.3f;    // 0.0f … 0.6f
-    int   midiNote  = 69;      // 0 - 127
-    bool onOff      = false;   // off
-    float mode      = -0.6f;    // -1.0f  …  1.0f
+    float cutoff     = 200.0f; // 40.0f  …  12000.0f log
+    float resonance  = 0.3f;    // 0.0f  …  0.6f
+    float keytrack   = 0.3f;    // 0.0f … 0.6f
+    bool onOff       = false;   // off
+    float mode       = -0.6f;    // -1.0f  …  1.0f
 
     // Internal
     float g = 0.0f;
@@ -76,11 +75,10 @@ struct SEMFilter {
         }
     }
 
-    void recalcFilter(int midiNote_) {
+    void recalcFilter(float targetFreq) {
         if (!onOff) return;
         float cutoffHz = cutoff;
-        float keyHz = 440.0f * powf(2.0f, (midiNote_ - 69) / 12.0f);
-        cutoffHz = cutoffHz * (1.0f - keytrack) + keyHz * keytrack;
+        cutoffHz = cutoffHz * (1.0f - keytrack) + targetFreq * keytrack;
         cutoffHz = std::clamp(cutoffHz, 40.0f, 12000.0f);
         g = 2.0f * sinf(M_PI * cutoffHz / sampleRate);
         g = std::min(g, 0.99f);

@@ -36,11 +36,14 @@ struct JackBackend
 
     bool runProcess = false;
     unsigned int split = 0;
+    std::atomic<float> latency {0.0f};
     std::atomic<uint32_t> splitPercent { 0 };
 
-    JackBackend(Loopino* ui_)
-        : engine()
-    {ui = ui_;}
+    JackBackend(Loopino* ui_) : engine() {   
+        ui = ui_;
+        ui->setLatencyCallback([this]() {
+            return latency.load(std::memory_order_relaxed); });
+    }
 
     bool start();
     void stop();
@@ -95,11 +98,12 @@ inline void JackBackend::setSplitPercent(uint32_t percent) noexcept {
 }
 
 inline void JackBackend::getSplitPercent() noexcept {
-    splitPercent.store(100 - engine.ui->latency, std::memory_order_relaxed);
+    splitPercent.store(100 - ui->latency, std::memory_order_relaxed);
 }
 
 inline jack_nframes_t JackBackend::percentToSplit(uint32_t percent,
                                      jack_nframes_t nframes) noexcept {
+    latency.store(nframes - ((nframes * percent) / 100), std::memory_order_relaxed);
     if (percent == 0) return 0;
     if (percent >= 100) return nframes;
     return (nframes * percent) / 100;
@@ -108,14 +112,14 @@ inline jack_nframes_t JackBackend::percentToSplit(uint32_t percent,
 void JackBackend::processMidi(void* midi_input_port_buf) {
     jack_midi_event_t in_event;
     jack_nframes_t event_count = jack_midi_get_event_count(midi_input_port_buf);
-    MidiKeyboard* keys = (MidiKeyboard*)engine.ui->keyboard->private_struct;
+    MidiKeyboard* keys = (MidiKeyboard*)ui->keyboard->private_struct;
 
     for (unsigned int i = 0; i < event_count; i++) {
         jack_midi_event_get(&in_event, midi_input_port_buf, i);
         if (in_event.time > split) break;
         if ((in_event.buffer[0] & 0xf0) == 0xc0) {  // program change on any midi channel
             //fprintf(stderr,"program changed %i", (int)in_event.buffer[1]);
-            engine.ui->loadPresetNum((int)in_event.buffer[1]);
+            ui->loadPresetNum((int)in_event.buffer[1]);
         } else if ((in_event.buffer[0] & 0xf0) == 0xb0) {   // controller
             if (in_event.buffer[1]== 120) { // engine mute by All Sound Off on any midi channel
                 //fprintf(stderr,"mute %i", (int)in_event.buffer[2]);
@@ -123,13 +127,13 @@ void JackBackend::processMidi(void* midi_input_port_buf) {
                         in_event.buffer[1]== 0)) { // bank change (LSB/MSB) on any midi channel
                 //fprintf(stderr,"bank changed %i", (int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 71) {
-                engine.ui->synth.setResoLP((int)in_event.buffer[2]);
+                ui->synth.setResoLP((int)in_event.buffer[2]);
             } else if (in_event.buffer[1]== 74) {
-                engine.ui->synth.setCutoffLP((int)in_event.buffer[2]);
+                ui->synth.setCutoffLP((int)in_event.buffer[2]);
             } else if (in_event.buffer[1] == 7) {    // CC7 Volume
                 constexpr float min_dB = -20.0f;
                 constexpr float max_dB =  12.0f;
-                engine.ui->volume = min_dB + ((float)in_event.buffer[2] / 127.0f) * (max_dB - min_dB);
+                ui->volume = min_dB + ((float)in_event.buffer[2] / 127.0f) * (max_dB - min_dB);
             } else {
                // fprintf(stderr,"controller changed %i value %i", (int)in_event.buffer[1], (int)in_event.buffer[2]);
             }
@@ -138,21 +142,21 @@ void JackBackend::processMidi(void* midi_input_port_buf) {
             int msb = in_event.buffer[2];
             int value14 = lsb | (msb << 7);  // 0...16383
             float pitchwheel = (value14 - 8192) * 0.00012207; // 1/8192.0f;
-            engine.ui->synth.setPitchWheel(pitchwheel);
-            wheel_set_value(engine.ui->PitchWheel, pitchwheel);
+            ui->synth.setPitchWheel(pitchwheel);
+            wheel_set_value(ui->PitchWheel, pitchwheel);
         } else if ((in_event.buffer[0] & 0xf0) == 0x90) {   // Note On
             int velocity = in_event.buffer[2];
             if (velocity < 1) {
-                engine.ui->synth.noteOff((int)(in_event.buffer[1]));
+                ui->synth.noteOff((int)(in_event.buffer[1]));
                 set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], false);
             } else {
-                engine.ui->synth.noteOn((int)(in_event.buffer[1]), (float)((float)velocity/127.0f));
+                ui->synth.noteOn((int)(in_event.buffer[1]), (float)((float)velocity/127.0f));
                 set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], true);
             }
             //fprintf(stderr,"Note On %i", (int)in_event.buffer[1]);
         }else if ((in_event.buffer[0] & 0xf0) == 0x80) {   // Note Off
             //fprintf(stderr,"Note Off %i", (int)in_event.buffer[1]);
-            engine.ui->synth.noteOff((int)(in_event.buffer[1]));
+            ui->synth.noteOff((int)(in_event.buffer[1]));
             set_key_in_matrix(keys->in_key_matrix[0], (int)in_event.buffer[1], false);
         }
     }

@@ -32,7 +32,7 @@ public:
     void setResonance(float r) { resonance = r;} // 0.0f, 1.3f
     void setFilterMix(float m) { mix = m; } // -1.0f, 1.0f
     void setKeyTracking(float amt) { keyTrack = amt; } // 0.0f, 1.0f
-    void setMidiNote(float note) { midiNote = note; } // 0.0f, 127.0f
+    void setMidiNote(float targetFreq_) { targetFreq = targetFreq_; } // 0.0f, 127.0f
 
     bool getOnOff() const { return onoff; }
 
@@ -122,9 +122,9 @@ private:
         float cutoff = baseCutoff;
 
         if (keyTrack > 0.0f) {
-            float noteOffset = (midiNote - 60.0f) / 12.0f;
-            float kt = std::pow(2.0f, noteOffset);
-            kt = std::pow(kt, 0.85f + 0.3f * keyTrack);
+            constexpr double refFreq = 261.625565; // 440.0
+            double ratio = targetFreq / refFreq;
+            double kt = std::pow(ratio, 0.85f + 0.3f * keyTrack);
             cutoff *= 1.0f + keyTrack * (kt - 1.0f);
         }
 
@@ -165,7 +165,7 @@ private:
     float mix       = 0.0f;
     float keyTrack  = 0.5f;
 
-    float midiNote  = 60.0f;
+    float targetFreq  = 440.0f;
 
     OnePole s1, s2, s3, s4;
     OnePole fbFilter;

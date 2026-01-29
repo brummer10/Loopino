@@ -93,6 +93,8 @@ public:
               uint32_t preferredPeriod_ = 256, uint32_t preferredPeriods = 3) {
         preferredPeriod = preferredPeriod_;
         uiPtr = ui;
+        uiPtr->isAlsa = true;
+        uiPtr->hideLatency();
         int err = snd_pcm_open(&pcm, deviceName.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
         if (err < 0) {
             throw std::runtime_error("snd_pcm_open failed");

@@ -72,17 +72,17 @@ public:
         }
     }
 
-    void noteOn(int midiNote_) {
-        midiNote = midiNote_;
-        tbfilter.noteOn(midiNote);
+    void noteOn(float targetFreq_) {
+        targetFreq = targetFreq_;
+        tbfilter.noteOn(targetFreq);
         tbfilter.reset();
-        wasp.setMidiNote(midiNote);
+        wasp.setMidiNote(targetFreq);
         wasp.reset();
-        filterLP.recalcFilter(midiNote);
+        filterLP.recalcFilter(targetFreq);
         filterLP.reset();
-        filterHP.recalcFilter(midiNote);
+        filterHP.recalcFilter(targetFreq);
         filterHP.reset();
-        obf.recalcFilter(midiNote);
+        obf.recalcFilter(targetFreq);
         obf.reset();
     }
 
@@ -115,7 +115,7 @@ public:
 
 private:
     double sampleRate = 44100.0;
-    int midiNote = 0;
+    float targetFreq = 440.0f;
     bool isInitied = false;
     std::atomic<DspChain*> activeChain { nullptr };
     std::atomic<DspChain*> retired { nullptr };

@@ -67,11 +67,11 @@ public:
         prePunchEnv = 1.0f;
     }
 
-    void noteOn(int midiNote) {
+    void noteOn(float targetFreq) {
         punchEnv = 1.0f;
         prePunchEnv = 1.0f;
         bassDropEnv = 0.0f;
-        noteHz =  440.0f * powf(2.0f, (midiNote - 69) / 12.0f);
+        noteHz =  targetFreq;
         update();
     }
 
