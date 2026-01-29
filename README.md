@@ -15,6 +15,7 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 ## Key Features
 
 - Drag-and-drop sample loading
+- Drag-and-drop scl/kbm loading
 - Integrated file browser
 - On-the-fly audio recording
 - Trim samples to clip marks
@@ -28,7 +29,8 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 - LP/HP ladder filter with resonance & cutoff
 - SEM12 Filter
 - Wasp Filter
-- TB-303 Filter
+- ACID-18 Filter
+- Multiple Sampler machine emulations
 - Phase modulators: sine, triangle, noise & Juno-style
 - Velocity curve support: Soft, Piano, Punch
 - Vibrato & tremolo
@@ -37,6 +39,7 @@ Craft seamless loops in seconds — Loopino keeps sampling simple, fast, and fun
 - Pitch Wheel support
 - MIDI PC support
 - Root frequency control
+- Micro-tonal support via Scala  
 - Up to 48 voices for polyphonic playback
 - Full ALSA Audio & RAW MIDI support
 - Full jack-audio-connection-kit support

@@ -3,6 +3,18 @@
 
 	# check on which OS we build
 	UNAME_S := $(shell uname -s)
+	# check which architecture we build on
+	UNAME_M := $(shell uname -m)
+	# check which architecture we build for
+	TARGET_ARCH = $(shell $(CXX) -dumpmachine | sed 's/-.*//')
+
+ifneq ($(UNAME_M),$(TARGET_ARCH))
+  CROSS_COMPILING = 1
+  $(info $(yellow) INFO: $(reset)Cross Compile $(blue)$(UNAME_M)$(reset) to $(blue)$(TARGET_ARCH)$(reset))
+endif
+
+# avoid optimisation for x86_64 arch when we cross compile
+ifneq ($(CROSS_COMPILING), 1)
 
 # get flags supported by CPU
 ifeq ($(UNAME_S), FreeBSD)
@@ -13,6 +25,35 @@ ifeq ($(UNAME_S), FreeBSD)
 else
   CPU_INFO = cat /proc/cpuinfo | grep flags
 endif
+
+# check for sse optimisation level only on x86_64 architecture
+ifeq ($(TARGET_ARCH), x86_64)
+  ifneq ($$(filter $(CPU_INFO) | grep sse3 ) , )
+    SSE_CFLAGS = -msse3 -mfpmath=sse -mfxsr -DUSE_SSE=1
+    FFT_FLAG = -DFFTCONVOLVER_USE_SSE=1
+  else ifneq ($$(filter $(CPU_INFO) | grep sse2 ) , )
+    SSE_CFLAGS = -msse2 -mfpmath=sse -mfxsr -DUSE_SSE=1
+    FFT_FLAG = -DFFTCONVOLVER_USE_SSE=1
+  else ifneq ($$(filter $(CPU_INFO) | grep sse ) , )
+    SSE_CFLAGS = -msse -mfpmath=sse -mfxsr -DUSE_SSE=1
+    FFT_FLAG = -DFFTCONVOLVER_USE_SSE=1
+  else ifneq ($$(filter $(CPU_INFO) | grep ARM ) , )
+    ifneq ($$(filter $(CPU_INFO) | grep ARMv7 ) , )
+      ifneq ($$(filter $(CPU_INFO) | grep vfpd32 ) , )
+        SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3 
+      else ifneq ($$(filter $(CPU_INFO) | grep vfpv3 ) , )
+        SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3
+      endif
+    else
+      ARMCPU = "YES"
+    endif
+  endif
+else
+  SSE_CFLAGS =
+endif
+
+endif
+
 
 ifeq ($(MAKECMDGOALS),debug)
   CXXFLAGS += -g -DDEBUG
@@ -28,27 +69,6 @@ ifneq ($(MAKECMDGOALS),clap)
     endif
   endif
 endif
-
-	# check CPU and supported optimization flags
-	ifneq ($$(filter $(CPU_INFO) | grep sse3 ) , )
-		SSE_CFLAGS = -msse3 -mfpmath=sse
-	else ifneq ($$(filter $(CPU_INFO) | grep sse2 ) , )
-		SSE_CFLAGS = -msse2 -mfpmath=sse
-	else ifneq ($$(filter $(CPU_INFO) | grep sse ) , )
-		SSE_CFLAGS = -msse -mfpmath=sse
-	else ifneq ($$(filter $(CPU_INFO) | grep ARM ) , )
-		ifneq ($$$(filter $(CPU_INFO)  | grep ARMv7 ) , )
-			ifneq ($$(filter $(CPU_INFO) | grep vfpd32 ) , )
-				SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3
-			else ifneq ($$(filter $(CPU_INFO) | grep vfpv3 ) , )
-				SSE_CFLAGS = -march=armv7-a -mfpu=vfpv3
-			endif
-		else
-			ARMCPU = "YES"
-		endif
-	else
-		SSE_CFLAGS =
-	endif
 
 	# set bundle name
 	NAME = loopino
