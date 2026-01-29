@@ -4203,9 +4203,7 @@ private:
             std::vector<int> m = {20,21,22,23,24,25};
             std::vector<int> f = {8,9,10,11,12};
             self->sz.applyPresetOrder(d);
-            Scala::TuningTable t;
-            Scala::makeEqual12(t);
-            self->synth.setScalaTuning(t);
+            combobox_set_active_entry(self->ScalaFactory, 0);
             self->synth.rebuildMachineChain(m);
             self->synth.rebuildFilterChain(f);
         };
