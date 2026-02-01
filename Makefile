@@ -68,6 +68,7 @@ clean:
 	@rm -f ./libxputty/xputty/resources/prev.png
 	@rm -f ./libxputty/xputty/resources/next.png
 	@rm -f ./libxputty/xputty/resources/reverse.png
+	@rm -f ./libxputty/xputty/resources/generate.png
 
 
 features:

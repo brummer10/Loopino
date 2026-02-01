@@ -156,14 +156,28 @@ public:
         rebuild();
     }
 
+    void setGenCache(bool const on) {
+        genCache = on;
+        rebuild();
+    }
+
+    void setSampleToBig(bool const on) {
+        sampleToBig = on;
+    }
+
     void rebuild() {
         if (!root) return;
         clear();
-        machines.applyState();
-        machines2.applyState();
+        if (genCache && !sampleToBig) {
+            machines.applyState();
+            machines2.applyState();
+            prewarmOctaves();
+            prewarmQuints();
+        } else {
+            machines.applyState();
+            runMachines();
+        }
         loopMachines.applyState();
-        prewarmOctaves();
-        prewarmQuints();
         makeLoop();
     }
 
@@ -191,10 +205,28 @@ public:
             std::lock_guard<std::mutex> g2(cacheMutex);
             cache.clear();
         }
+        if (genCache && !sampleToBig) {
+            machines.applyState();
+            machines2.applyState();
+            prewarmOctaves();
+            prewarmQuints();
+        } else {
+            machines.applyState();
+            runMachines();
+        }
+    }
+
+    void runMachines() {
+        if (!root) return;
+        auto s = std::make_shared<SampleInfo>();
+        s->data = std::move(root->data);
+        s->rootFreq = root->rootFreq;
+        s->sourceRate = root->sourceRate;
+        if (reverse) std::reverse(s->data.begin(), s->data.end());
         machines.applyState();
-        machines2.applyState();
-        prewarmOctaves();
-        prewarmQuints();
+        machines.setSampleRate(s->sourceRate);
+        machines.process(s->data);
+        sample_cache = s;
     }
 
     void setLoopRoot(std::shared_ptr<const SampleInfo> s) {
@@ -216,6 +248,11 @@ public:
     std::shared_ptr<const SampleInfo> getLoop() {
         if (!loop) return nullptr;
         return loop;
+    }
+
+    std::shared_ptr<const SampleInfo> getSample() {
+        if (!sample_cache) return nullptr;
+        return sample_cache;
     }
 
     std::shared_ptr<const SampleInfo> getNearestOctave(int note) {
@@ -279,6 +316,7 @@ private:
     std::shared_ptr<const SampleInfo> root;
     std::shared_ptr<const SampleInfo> loop;
     std::shared_ptr<const SampleInfo> loop_cache;
+    std::shared_ptr<const SampleInfo> sample_cache;
     std::map<int,std::shared_ptr<SampleInfo>> cache;
     std::set<int> pending;
 
@@ -290,6 +328,8 @@ private:
     //std::thread worker;
     std::atomic<bool> stop{false};
     bool reverse = false;
+    bool genCache = false;
+    bool sampleToBig = false;
 
     inline double midiToFreq(int midiNote) {
         return  440.0f * std::pow(2.0, (midiNote - 69 ) / 12.0);

@@ -604,6 +604,8 @@ public:
         filter.rebuildFilterChain(order);
     }
 
+    void setUseCache(bool o) { useCache = o; }
+
     void noteOn(int midiNote, float velocity,
                 std::shared_ptr<const SampleInfo> sampleData,
                 double sourceRate, double rootFreq_, bool looping = true) {
@@ -613,8 +615,8 @@ public:
         active = true;
         vel = velocityCurve(velocity);
 
-        if (!sampleToBig) {
-            if (!looping) {
+        if (!looping) {
+            if (useCache && !sampleToBig) {
                 auto s = rb->getNearest(midiNote);
                 if (s) {
                     sampleData = s;
@@ -622,14 +624,22 @@ public:
                     rootFreq   = s->rootFreq;
                 }
             } else {
-                auto s = rb->getLoop();
+                auto s = rb->getSample();
                 if (s) {
                     sampleData = s;
                     sourceRate = s->sourceRate;
                     rootFreq   = s->rootFreq;
                 }
             }
+        } else {
+            auto s = rb->getLoop();
+            if (s) {
+                sampleData = s;
+                sourceRate = s->sourceRate;
+                rootFreq   = s->rootFreq;
+            }
         }
+
         double targetFreq = midiToFreq(midiNote);
         player.setSample(sampleData, sourceRate);
         player.setFrequency(targetFreq, rootFreq);
@@ -712,6 +722,7 @@ private:
 
     bool active = false;
     bool sampleToBig = true;
+    bool useCache = false;
     double sampleRate = 44100.0f;
     float vel = 1.0f;
     float velmode = 0.7f;
@@ -861,7 +872,13 @@ public:
 
     void setSampleToBig(bool set) {
         updateAllVoices(&SampleVoice::setSampleToBig, set);
+        rb.setSampleToBig(set);
         sampleToBig = set;
+    }
+
+    void genCache(int o) {
+        rb.setGenCache(intToBool(o));
+        updateAllVoices(&SampleVoice::setUseCache, intToBool(o));
     }
 
     void setReverse(int o) { rb.setReverse(intToBool(o)); }
@@ -878,9 +895,7 @@ public:
 
     void setBank(const SampleBank* sbank) {
         sampleBank = sbank;
-        if (!sampleToBig) {
-            rb.setRoot(sampleBank->getSample(0));
-        }
+        rb.setRoot(sampleBank->getSample(0));
     }
 
     void getAnalyseBuffer(float *abuf, int frames) {

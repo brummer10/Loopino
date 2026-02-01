@@ -88,6 +88,7 @@
         param.registerParam("Time On/Off",    "Machine",0, 1, 0, 1,          (void*)&tmonoff,       true, IS_INT);
         param.registerParam("Time ",          "Machine",0.0, 1.0, 0.2, 0.01, (void*)&tmtime,       false, IS_FLOAT);
         param.registerParam("Reverse",       "Machine",0, 1, 0, 1,           (void*)&reverse,       true, IS_INT);
+        param.registerParam("UnisonKeys",    "Machine",0, 1, 0, 1,           (void*)&genrateKeyCache,true,IS_INT);
     }
 
     void setValuesFromHost() {
@@ -168,6 +169,7 @@
             adj_set_value(TMOnOff->adj, (float)tmonoff);
             adj_set_value(TMTime->adj, tmtime);
             adj_set_value(Reverse->adj, (float)reverse);
+            adj_set_value(GenKeyCache->adj, (float)genrateKeyCache);
 
             expose_widget(LpKeyTracking);
             expose_widget(HpKeyTracking);
@@ -249,6 +251,7 @@
         synth.setTMOnOff(tmonoff);
         synth.setTMTime(tmtime);
         synth.setReverse(reverse);
+        synth.genCache(toBig ? 0 : genrateKeyCache);
         synth.rebuildMachineChain(machineOrder);
         synth.rebuildFilterChain(filterOrder);
     }
@@ -282,7 +285,6 @@
         //fetch.startTimeout(60);
         //fetch.set<Loopino, &Loopino::runGui>(this);
     }
-    
 
     void showGui() {
         firstLoop = true;
@@ -332,8 +334,8 @@
             host_height = attrs.height;
         }
         #endif
-        if ((host_width != width && host_width != 1) ||
-            (host_height != height && host_height != 1)) {
+        if (((host_width < width || host_width > width+40) && host_width != 1) ||
+            ((host_height < height || host_height > height+40) && host_height != 1)) {
             os_resize_window(app.dpy, w_top, host_width, host_height);
         }
         #endif
@@ -349,6 +351,47 @@
         clearValueBindings();
         onExit();
     }
+
+    #ifndef _WIN32
+    #if defined (IS_VST2)
+    static bool window_has_xdnd_proxy(Display* dpy, Window w) {
+        Atom xdnd_proxy = XInternAtom(dpy, "XdndProxy", False);
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems, bytes_after;
+        unsigned char* data = nullptr;
+
+        int status = XGetWindowProperty(dpy, w, xdnd_proxy, 0, 1, False, XA_WINDOW,
+                        &actual_type, &actual_format, &nitems, &bytes_after, &data);
+
+        if (data) XFree(data);
+
+        return (status == Success && actual_type == XA_WINDOW &&
+                actual_format == 32 && nitems == 1);
+    }
+
+    static void set_xdnd_proxy(Display* dpy, Window plugin_window) {
+        if (!dpy || !plugin_window) return;
+        Atom xdnd_proxy = XInternAtom(dpy, "XdndProxy", False);
+        if (xdnd_proxy == None) return;
+        Window root, parent;
+        Window* children = nullptr;
+        unsigned int nchildren = 0;
+        Window w = plugin_window;
+
+        while (w != None) {
+            XChangeProperty(dpy, w, xdnd_proxy, XA_WINDOW, 32, PropModeReplace,
+                            (unsigned char*)&plugin_window, 1);
+
+            if (!XQueryTree(dpy, w, &root, &parent, &children, &nchildren)) break;
+            if (children) XFree(children);
+            if (parent == root || parent == None) break;
+            w = parent;
+        }
+        XFlush(dpy);
+    }
+    #endif
+    #endif
 
     void runGui() {
         if (firstLoop) {
@@ -388,7 +431,7 @@
     void saveState(StreamOut& out) {
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 15; // guard for future proof
+        header.version = 16; // guard for future proof
         header.dataSize = af.samplesize;
         out.write(&header, sizeof(header));
 
@@ -482,6 +525,8 @@
             out.write(&x, sizeof(x));
         for (auto x : machineOrder)
             out.write(&x, sizeof(x));
+        // since version 16
+        out.write(&genrateKeyCache, sizeof(genrateKeyCache));
 
         writeSamples(out, af.samples, af.samplesize);
         // since version 13
@@ -513,7 +558,7 @@
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 15) {
+        if (header.version > 16) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -620,6 +665,9 @@
                 in.read(&x, sizeof(x));
             for (auto& x : machineOrder)
                 in.read(&x, sizeof(x));
+        }
+        if (header.version > 15) {
+            in.read(&genrateKeyCache, sizeof(genrateKeyCache));
         }
 
         readSamples(in, af.samples, af.samplesize);

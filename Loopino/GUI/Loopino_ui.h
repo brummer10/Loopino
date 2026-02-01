@@ -342,6 +342,16 @@ public:
         LatencyLabel = add_label(top, "-- ms", 100,3,60,25);
         commonWidgetSettings(LatencyLabel);
         #endif
+
+        GenKeyCache =  add_image_toggle_button(top, "",  WINDOW_WIDTH-250, 3, 30, 30);
+        GenKeyCache->scale.gravity = ASPECT;
+        widget_get_png(GenKeyCache, LDVAR(generate_png));
+        GenKeyCache->flags |= HAS_TOOLTIP;
+        add_tooltip(GenKeyCache, "Generate unison Key Cache");
+        GenKeyCache->func.expose_callback = draw_button;
+        GenKeyCache->func.value_changed_callback = set_generate_keycache;
+        commonWidgetSettings(GenKeyCache);
+
         ScalaFactory = add_combobox(top, "", WINDOW_WIDTH-200, 5, 180, 25);
         ScalaFactory->scale.gravity = ASPECT;
         commonWidgetSettings(ScalaFactory);
@@ -676,7 +686,7 @@ public:
 private:
     SizeGroup sz;
     Widget_t *w, *lw, *Controls;
-    Widget_t *ScalaFactory, *Latency, *LatencyLabel;
+    Widget_t *ScalaFactory, *Latency, *LatencyLabel, *GenKeyCache;
     Widget_t *w_quit;
     Widget_t *filebutton;
     Widget_t *loopview, *wview;
@@ -728,6 +738,7 @@ private:
     bool firstLoop;
     bool guiIsCreated;
     bool inDrag;
+    bool toBig = false;
     std::string newLabel;
     std::vector<std::string> keys;
     std::vector<std::string> presetFiles;
@@ -773,6 +784,7 @@ private:
     int pressMark = 0;
     int LMark = 0;
     int tuningScale = 0;
+    int genrateKeyCache = 0;
     constexpr static uint32_t KEYCACHE_MAX_SAMPLES = 384000;
     std::vector<float> analyseBuffer;
     std::function<float()> latencyCallback;
@@ -1028,7 +1040,7 @@ private:
         if (!sampleBuffer.size()) return;
         if (!sampleData) sampleData = std::make_shared<SampleInfo>();
         if (!custom) getPitch();
-        bool toBig = sampleBuffer.size() < KEYCACHE_MAX_SAMPLES ? false : true;
+        toBig = sampleBuffer.size() < KEYCACHE_MAX_SAMPLES ? false : true;
         synth.setSampleToBig(toBig);
 
         //sbank.clear();
@@ -1044,12 +1056,13 @@ private:
         
         sampleBuffer.clear();
         sampleBuffer.resize(af.samplesize);
-        smooth.setSampleRate((float)jack_sr);
-        smooth.reset();
-        smooth.cutoff = std::clamp(freq * 2.4f, 600.0f, 3000.0f);
+        //smooth.setSampleRate((float)jack_sr);
+        //smooth.reset();
+        //smooth.cutoff = std::clamp(freq * 2.4f, 600.0f, 3000.0f);
         float maxAbs = 0.0f;
         for (size_t i = 0; i < af.samplesize; i++) {
-            sampleBuffer[i] = smooth.process(af.samples[i * af.channels] ) * 0.92f;
+            //sampleBuffer[i] = smooth.process(af.samples[i * af.channels] ) * 0.92f;
+            sampleBuffer[i] = af.samples[i * af.channels];
             float a = std::fabs(sampleBuffer[i]);
             if (a > maxAbs) maxAbs = a;
         }
@@ -1213,7 +1226,7 @@ private:
             }
             loopPoint_l = 0;
             loopPoint_r = af.samplesize;
-            bool toBig = af.samplesize < KEYCACHE_MAX_SAMPLES ? false : true;
+            toBig = af.samplesize < KEYCACHE_MAX_SAMPLES ? false : true;
             synth.setSampleToBig(toBig);
 
             //loadLoopNew = true;
@@ -1237,6 +1250,7 @@ private:
         af.samplerate = jack_sr;
         af.channels = 1;
         std::memset(af.samples, 0, new_size * sizeof(float));
+
         const float duration = new_size / jack_sr / 2;
         const float f = 440.0f;
         for (int i = 0; i < new_size; ++i) {
@@ -1252,6 +1266,7 @@ private:
             }
             af.samples[i] = s * fade;
         }
+
         loopPoint_l = 0;
         if (guiIsCreated) {
             adj_set_max_value(wview->adj, (float)af.samplesize);
@@ -1424,7 +1439,18 @@ private:
         XLockDisplay(w->app->dpy);
         #endif
         #if defined (IS_VST2)
-        checkParentWindowSize(w_top->width, w_top->height);
+        static bool check = false;
+        waitOn++;
+        if (waitOn > 32) {
+            checkParentWindowSize(w_top->width, w_top->height);
+            #ifndef _WIN32
+            if (!check) {
+                check = window_has_xdnd_proxy(w_top->app->dpy,p);
+                if (!check) set_xdnd_proxy(w_top->app->dpy,w_top->widget);
+            }
+            #endif
+            waitOn = 0;
+        }
         #endif
         #if defined (RUN_AS_PLUGIN)
             runGui();
@@ -1525,7 +1551,7 @@ private:
         filebutton->flags |= HAS_TOOLTIP;
         add_tooltip(filebutton, "Load audio file");
         filebutton->func.expose_callback = draw_button;
-        filebutton->func.user_callback = dialog_response;
+        filebutton->func.user_callback = dnd_load_response;
         commonWidgetSettings(filebutton);
 
         Presets = add_button(frame, "", 45, 22, 35, 35);
@@ -2467,6 +2493,20 @@ private:
         self->synth.allNoteOff();
     }
 
+    static void set_generate_keycache(void *w_, void* user_data) {
+        Widget_t *w = (Widget_t*)w_;
+        Loopino *self = static_cast<Loopino*>(w->parent_struct);
+        self->genrateKeyCache = (int)adj_get_value(w->adj);
+        if (self->toBig) {
+            if (self->guiIsCreated) {
+                self->loadNew = true;
+                update_waveview(self->wview, self->sampleBuffer.data(), self->sampleBuffer.size());
+            }
+        } else {
+            self->synth.genCache(self->genrateKeyCache);
+        }
+    }
+
     // select if we play OneShoot or Loop
     static void button_set_callback(void *w_, void* user_data) {
         Widget_t *w = (Widget_t*)w_;
@@ -3014,10 +3054,10 @@ private:
 
     static void setFrameColour(Widget_t* w, cairo_t *cr, int x, int y, int wi, int h) {
         Colors *c = get_color_scheme(w, NORMAL_);
-        Colors *c1 = get_color_scheme(w, PRELIGHT_);
+       // Colors *c1 = get_color_scheme(w, PRELIGHT_);
         cairo_pattern_t *pat = cairo_pattern_create_linear (x, y, x, y + h);
         cairo_pattern_add_color_stop_rgba
-            (pat, 0, c1->base[0], c1->base[1], c1->base[2],0.3);
+            (pat, 0, c->bg[0]*2.5, c->bg[1]*2.5, c->bg[2]*2.5,1.0);
         cairo_pattern_add_color_stop_rgba 
             (pat, 1, c->bg[0]*0.1, c->bg[1]*0.1, c->bg[2]*0.1,1.0);
         cairo_set_source(cr, pat);
@@ -3061,7 +3101,7 @@ private:
         cairo_set_source_rgba(w->crb, UI_FRAME);
         self->roundrec(w->crb, 5, 0, width_t-10, height_t, 5);
         cairo_fill_preserve(w->crb);
-
+/*
         cairo_pattern_t *pat = cairo_pattern_create_linear( 0, 0, 0, height_t);
         cairo_pattern_add_color_stop_rgba(pat, 0.00, 0.32, 0.36, 0.36, 0.83);
         cairo_pattern_add_color_stop_rgba(pat, 0.09, 0.25, 0.25, 0.25, 0.0);
@@ -3070,7 +3110,7 @@ private:
         cairo_set_source(w->crb, pat);
         cairo_fill_preserve(w->crb);
         cairo_pattern_destroy(pat);
-
+*/
         setFrameColour(w, w->crb, 5, 5, width_t-10, height_t-10);
         cairo_stroke(w->crb);
         cairo_new_path (w->crb);
@@ -3353,7 +3393,7 @@ private:
             self->roundrec(w->crb,3.0, 4.0, width-6, height-8, 8.0);
             setButtonFrame(w, PRELIGHT_, height, 3);
             cairo_fill_preserve(w->crb);
-            cairo_set_source_rgba(w->crb, 0.043, 0.043, 0.043, 0.2);
+            cairo_set_source_rgba(w->crb, 0.043, 0.343, 0.043, 0.2);
             cairo_fill_preserve(w->crb);
             cairo_set_source_rgba(w->crb, 0.043, 0.043, 0.043, 1);
             cairo_stroke (w->crb);
@@ -3428,7 +3468,7 @@ private:
             cairo_show_text(cri, txt);
         }
         // mark Sample size to big
-        if ((uint32_t)wave_view->size > KEYCACHE_MAX_SAMPLES) {
+        if ((uint32_t)wave_view->size > KEYCACHE_MAX_SAMPLES && genrateKeyCache) {
             float x_max = margin_left + (KEYCACHE_MAX_SAMPLES / samples_per_pixel);
             if (x_max < width - margin_right) {
                 cairo_save(cri);
@@ -3495,11 +3535,12 @@ private:
         // show sample size or warning
         cairo_set_font_size (cri, (w->app->small_font-2)/w->scale.ascale);
         cairo_set_source_rgba(cri, 0.85, 0.85, 0.85, 0.9);
-        if ((uint32_t)wave_view->size < KEYCACHE_MAX_SAMPLES) {
+        if ((uint32_t)wave_view->size < KEYCACHE_MAX_SAMPLES || !genrateKeyCache) {
             snprintf(s, 63, "%.2f ms", total_ms);
         } else {
             cairo_set_source_rgba(cri, 0.85, 0.25, 0.25, 1.0);
             snprintf(s, 99, "%.2f ms ! Maximum supported length: %.2f ms", total_ms, max_ms);
+            adj_set_value(GenKeyCache->adj, 0.0);
         }
         cairo_text_extents(cri, s, &extents);
         cairo_move_to (cri, width - extents.width - 10, height - extents.height);
@@ -4334,7 +4375,7 @@ private:
         if (!out) return false;
         PresetHeader header;
         std::memcpy(header.magic, "LOOPINO", 8);
-        header.version = 15; // guard for future proof
+        header.version = 16; // guard for future proof
         header.dataSize = af.samplesize;
         writeString(out, header);
 
@@ -4428,6 +4469,8 @@ private:
             writeValue(out, x);
         for(auto x : machineOrder)
             writeValue(out, x);
+        // since version 16
+        writeControllerValue(out, GenKeyCache);
 
         writeSampleBuffer(out, af.samples, af.samplesize);
         // since version 13
@@ -4451,7 +4494,7 @@ private:
 
         // we need to update the header version when change the preset format
         // then we could protect new values with a guard by check the header version
-        if (header.version > 15) {
+        if (header.version > 16) {
             std::cerr << "Warning: newer preset version (" << header.version << ")\n";
             return false;
         }
@@ -4570,6 +4613,9 @@ private:
                 readValue(in, x);
             for(auto& x : machineOrder)
                 readValue(in, x);
+        }
+        if (header.version > 15) {
+            readControllerValue(in, GenKeyCache);
         }
 
         readSampleBuffer(in, af.samples, af.samplesize);
